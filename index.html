@@ -82,28 +82,29 @@
 
 <script>
     // Define the delivery zones with consistent colors
+    // Using more vibrant and distinct colors for better visibility
     const deliveryZones = {
         // Zone codes for regions in Austria
-        'A': { gebiet: 1, color: '#87CEFA' }, // Light blue - Gebiet 1
-        'B': { gebiet: 1, color: '#87CEFA' }, // Light blue - Gebiet 1
-        'C': { gebiet: 1, color: '#87CEFA' }, // Light blue - Gebiet 1
-        'E': { gebiet: 1, color: '#87CEFA' }, // Light blue - Gebiet 1
-        'D': { gebiet: 2, color: '#E6CCF2' }, // Light purple - Gebiet 2
-        'H': { gebiet: 2, color: '#E6CCF2' }, // Light purple - Gebiet 2
-        'F': { gebiet: 3, color: '#9370DB' }, // Darker purple - Gebiet 3
-        'G': { gebiet: 4, color: '#FFFF99' }, // Yellow - Gebiet 4
-        'I': { gebiet: 5, color: '#FFA07A' }, // Red/orange - Gebiet 5
-        'J': { gebiet: 6, color: '#90EE90' }  // Light green - Gebiet 6
+        'A': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
+        'B': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
+        'C': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
+        'E': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
+        'D': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2
+        'H': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2
+        'F': { gebiet: 3, color: '#FF9900' }, // Orange - Gebiet 3
+        'G': { gebiet: 4, color: '#109618' }, // Green - Gebiet 4
+        'I': { gebiet: 5, color: '#990099' }, // Purple - Gebiet 5
+        'J': { gebiet: 6, color: '#0099C6' }  // Cyan - Gebiet 6
     };
     
     // Map gebiet numbers to names and colors for the legend
     const gebietInfo = {
-        1: { name: 'Gebiet 1 (A, B, C, E)', color: '#87CEFA' },
-        2: { name: 'Gebiet 2 (H, D)', color: '#E6CCF2' },
-        3: { name: 'Gebiet 3 (F)', color: '#9370DB' },
-        4: { name: 'Gebiet 4 (G)', color: '#FFFF99' },
-        5: { name: 'Gebiet 5 (I)', color: '#FFA07A' },
-        6: { name: 'Gebiet 6 (J)', color: '#90EE90' }
+        1: { name: 'Gebiet 1 (A, B, C, E)', color: '#3366CC' },
+        2: { name: 'Gebiet 2 (H, D)', color: '#DC3912' },
+        3: { name: 'Gebiet 3 (F)', color: '#FF9900' },
+        4: { name: 'Gebiet 4 (G)', color: '#109618' },
+        5: { name: 'Gebiet 5 (I)', color: '#990099' },
+        6: { name: 'Gebiet 6 (J)', color: '#0099C6' }
     };
     
     // Region to province mapping for Austria (Bundesländer)
@@ -167,26 +168,26 @@
     function determineZone(feature) {
         if (!feature || !feature.properties) return null;
         
-        // 1. Try to use the hex color code if available
-        if (feature.properties.color) {
-            const colorHex = feature.properties.color.toUpperCase();
-            // Check if the color code contains any of our zone letters
-            for (const [zone, info] of Object.entries(deliveryZones)) {
-                if (colorHex.includes(zone)) {
-                    return zone;
-                }
+        // Try these properties in order of preference
+        const props = ['zone', 'lieferzone', 'zone_code'];
+        for (const prop of props) {
+            if (feature.properties[prop] && deliveryZones[feature.properties[prop]]) {
+                return feature.properties[prop];
             }
         }
         
-        // 2. Try to use the first character of color if it matches a zone
-        if (feature.properties.color) {
-            const firstChar = feature.properties.color.substring(1, 2).toUpperCase();
+        // Check if first character of postal code matches a zone (if postal code is available)
+        if (feature.properties.plz) {
+            const plzStr = typeof feature.properties.plz === 'object' 
+                ? Object.keys(feature.properties.plz)[0] 
+                : feature.properties.plz.toString();
+            const firstChar = plzStr.charAt(0).toUpperCase();
             if (deliveryZones[firstChar]) {
                 return firstChar;
             }
         }
         
-        // 3. If we got here and still don't have a zone, check if the feature has a name we can use
+        // Try to extract from name if available
         if (feature.properties.name) {
             const name = feature.properties.name.toLowerCase();
             // Check for key locations mentioned in the data
@@ -200,12 +201,93 @@
             if (name.includes('vorarlberg')) return 'J';
         }
         
+        // Try using the 'iso' code if available (GemKZ)
+        if (feature.properties.iso) {
+            const isoStr = typeof feature.properties.iso === 'object'
+                ? Object.keys(feature.properties.iso)[0]
+                : feature.properties.iso.toString();
+            
+            // First digit of GemKZ corresponds to Austrian federal states:
+            // 1: Burgenland, 2: Kärnten, 3: Niederösterreich, 4: Oberösterreich,
+            // 5: Salzburg, 6: Steiermark, 7: Tirol, 8: Vorarlberg, 9: Wien
+            const firstDigit = isoStr.charAt(0);
+            switch (firstDigit) {
+                case '1': return 'B'; // Assuming Burgenland is part of Niederösterreich zones
+                case '2': return 'G'; // Kärnten
+                case '3': return 'B'; // Niederösterreich (default to B if not more specific)
+                case '4': return 'H'; // Oberösterreich (default to H if not more specific)
+                case '5': return 'E'; // Salzburg
+                case '6': return 'F'; // Steiermark
+                case '7': return 'I'; // Tirol
+                case '8': return 'J'; // Vorarlberg
+                case '9': return 'A'; // Wien
+            }
+        }
+        
+        // If we can't determine the zone, check if it has explicit color that can be mapped
+        if (feature.properties.color) {
+            // Try to map the color to a zone
+            const colorHex = feature.properties.color.toUpperCase();
+            for (const [zone, info] of Object.entries(deliveryZones)) {
+                if (colorHex === info.color.toUpperCase()) {
+                    return zone;
+                }
+            }
+        }
+        
+        // Check location by coordinates (rough approximation)
+        if (feature.geometry && feature.geometry.coordinates) {
+            // Use the first coordinate pair (or center point) for simple determination
+            let lng, lat;
+            if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
+                const coords = feature.geometry.type === 'Polygon' 
+                    ? feature.geometry.coordinates[0][0] 
+                    : feature.geometry.coordinates[0][0][0];
+                lng = coords[0];
+                lat = coords[1];
+            } else if (feature.geometry.type === 'Point') {
+                lng = feature.geometry.coordinates[0];
+                lat = feature.geometry.coordinates[1];
+            }
+            
+            if (lng && lat) {
+                // Rough geographic approximation for Austrian regions
+                if (lng > 16.0 && lat > 48.0) return 'A'; // Wien area
+                if (lng > 15.5 && lat > 48.0) return 'B'; // NÖ northeast
+                if (lng < 15.5 && lat > 48.0) return 'C'; // NÖ northwest
+                if (lng < 14.0 && lat < 48.0 && lat > 47.0) return 'D'; // OÖ south
+                if (lng > 15.0 && lat < 48.0 && lat > 47.0) return 'E'; // NÖ south
+                if (lng > 14.5 && lat < 47.5) return 'F'; // Steiermark
+                if (lng > 13.5 && lng < 14.5 && lat < 47.0) return 'G'; // Kärnten
+                if (lng < 14.0 && lat > 48.0) return 'H'; // OÖ north
+                if (lng > 10.0 && lng < 13.0 && lat < 48.0) return 'I'; // Tirol
+                if (lng < 10.0) return 'J'; // Vorarlberg
+            }
+        }
+        
         return null;
     }
     
+    // Cache for zone determinations to improve performance
+    const zoneCache = new Map();
+    
     // Get the color for a feature
     function getFeatureColor(feature) {
+        // Check cache first
+        const featureId = feature.id || JSON.stringify(feature.properties);
+        if (zoneCache.has(featureId)) {
+            const cachedZone = zoneCache.get(featureId);
+            return deliveryZones[cachedZone]?.color || '#CCCCCC';
+        }
+        
+        // Determine zone
         const zone = determineZone(feature);
+        
+        // Cache the result
+        if (zone) {
+            zoneCache.set(featureId, zone);
+        }
+        
         if (zone && deliveryZones[zone]) {
             return deliveryZones[zone].color;
         }
@@ -316,18 +398,49 @@
         legend.addTo(map);
     }
 
+    // Common style function for all layers
+    function styleFeature(feature) {
+        return {
+            'fillColor': getFeatureColor(feature),
+            'weight': 2,
+            'opacity': 1,
+            'color': '#000000',
+            'fillOpacity': 0.7,
+            'dashArray': ''
+        };
+    }
+    
+    // Highlight feature on mouseover
+    function highlightFeature(e) {
+        const layer = e.target;
+        layer.setStyle({
+            'weight': 3,
+            'color': '#FFFFFF',
+            'dashArray': '',
+            'fillOpacity': 0.8
+        });
+        layer.bringToFront();
+    }
+    
+    // Reset highlight on mouseout
+    function resetHighlight(e) {
+        const layer = e.target;
+        layer.setStyle(styleFeature(layer.feature));
+    }
+    
+    // Set up interactions for each feature
+    function onEachFeature(feature, layer) {
+        popUp(feature, layer);
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+    }
+
     const vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
         {
-            onEachFeature: popUp,
-            style: function (feature) {
-                return {
-                    'fillColor': getFeatureColor(feature),
-                    'weight': 1.5,
-                    'opacity': 1,
-                    'color': '#333',
-                    'fillOpacity': 0.7
-                };
-            }
+            onEachFeature: onEachFeature,
+            style: styleFeature
         }
     );
     vorwahlLayer.getAttribution = function () {
@@ -343,16 +456,8 @@
 
     const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
         {
-            onEachFeature: popUp,
-            style: function (feature) {
-                return {
-                    'fillColor': getFeatureColor(feature),
-                    'weight': 1,
-                    'opacity': 1,
-                    'color': '#555',
-                    'fillOpacity': 0.6
-                };
-            }
+            onEachFeature: onEachFeature,
+            style: styleFeature
         }
     );
     plzLayer.getAttribution = function () {
@@ -367,39 +472,24 @@
     }
 
     const gemeindenLayer = new L.GeoJSON.AJAX("data/gemeinden_95_geo.json", {
-        onEachFeature: popUp,
-        style: function (feature) {
-            return {
-                'fillColor': getFeatureColor(feature),
-                'weight': 1,
-                'opacity': 1,
-                'color': '#555',
-                'fillOpacity': 0.5
-            };
-        }
+        onEachFeature: onEachFeature,
+        style: styleFeature
     });
     
     const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json", {
-        style: function (feature) {
-            return {
-                'fillColor': getFeatureColor(feature),
-                'weight': 1.5,
-                'opacity': 1,
-                'color': '#555',
-                'fillOpacity': 0.4
-            };
-        }
+        onEachFeature: onEachFeature,
+        style: styleFeature
     });
     
     const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {
-        onEachFeature: popUp,
-        style: function (feature) {
+        onEachFeature: onEachFeature,
+        style: function(feature) {
             return {
                 'fillColor': deliveryZones['A'].color, // Vienna is always in Zone A
-                'weight': 1,
+                'weight': 2,
                 'opacity': 1,
-                'color': '#555',
-                'fillOpacity': 0.6
+                'color': '#000000',
+                'fillOpacity': 0.7
             };
         }
     });
@@ -493,7 +583,7 @@
                     layer.setStyle({
                         'fillColor': zone ? deliveryZones[zone].color : '#CCCCCC',
                         'fillOpacity': 0.8,
-                        'weight': 2,
+                        'weight': 3,
                         'color': '#000'
                     });
 
