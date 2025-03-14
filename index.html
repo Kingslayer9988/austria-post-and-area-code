@@ -65,6 +65,13 @@
             margin-right: 8px;
             opacity: 0.7;
         }
+        
+        #searchInput {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            width: 180px;
+        }
 
     </style>
 </head>
@@ -73,38 +80,58 @@
 <div id='map'></div>
 
 <script>
-    // Define the delivery zones based on your screenshot
+    // Define the delivery zones based on your screenshot - adjusted colors to match screenshot
     const deliveryZones = {
-        'Gebiet 1': {
+        '1': {
+            id: 'Gebiet 1',
             zones: ['A', 'B', 'C', 'E'],
-            color: '#87CEFA',  // Light blue
+            color: '#ADD8E6',  // Light blue
             description: 'Gebiet 1 (A, B, C, E)'
         },
-        'Gebiet 2': {
+        '2': {
+            id: 'Gebiet 2',
             zones: ['H', 'D'],
             color: '#E6CCF2',  // Light purple/pink
             description: 'Gebiet 2 (H, D)'
         },
-        'Gebiet 3': {
+        '3': {
+            id: 'Gebiet 3',
             zones: ['F'],
             color: '#9370DB',  // Darker purple
             description: 'Gebiet 3 (F)'
         },
-        'Gebiet 4': {
+        '4': {
+            id: 'Gebiet 4',
             zones: ['G'],
             color: '#FFFF99',  // Yellow
             description: 'Gebiet 4 (G)'
         },
-        'Gebiet 5': {
+        '5': {
+            id: 'Gebiet 5',
             zones: ['I'],
             color: '#FFA07A',  // Red/orange
             description: 'Gebiet 5 (I)'
         },
-        'Gebiet 6': {
+        '6': {
+            id: 'Gebiet 6',
             zones: ['J'],
             color: '#90EE90',  // Light green
             description: 'Gebiet 6 (J)'
         }
+    };
+    
+    // Define zone to postal code area mapping based on provinces in Austria
+    const zonePostalMapping = {
+        'A': [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], // Vienna, parts of Lower Austria - first digits of postal codes
+        'B': [2], // Northeast Lower Austria
+        'C': [3], // Northwest Lower Austria
+        'D': [4], // Upper Austria
+        'E': [5], // Salzburg and parts of Lower Austria
+        'F': [8], // Styria
+        'G': [9], // Carinthia 
+        'H': [4, 5], // Upper Austria parts and parts of Salzburg
+        'I': [6], // Tyrol
+        'J': [67, 68, 69] // Vorarlberg - these are specific postal code prefixes
     };
     
     let minX = Infinity;
@@ -150,96 +177,43 @@
     };
 
     const hash = new L.Hash(map);
-    // const popUpPromises = [];
 
-    function popUp(feature, layer) {
-        // popUpPromises.push(new Promise((resolve, reject) => {
-            const out = [];
-            if (feature.hasOwnProperty('properties')) {
-                // Add delivery zone info if possible
-                const zone = getZoneFromFeature(feature);
-                if (zone) {
-                    const gebiet = getGebietFromZone(zone);
-                    out.push("<b>Zone:</b> " + zone);
-                    out.push("<b>Liefergebiet:</b> " + gebiet);
-                }
-                
-                for (const key in feature.properties) {
-                    if (key === 'color') continue;
-                    if (key === 'color1') continue;
-                    if (key === 'plzcolor') continue;
-                    if (key === 'plzcolor1') continue;
-                    if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
-                        feature.properties[key] !== null
-                    ) {
-                        let valStr = '';
-                        if (Object.keys(feature.properties[key]).length > 1) {
-                            valStr += '<ul>';
-                            for (const val in feature.properties[key]) {
-                                if (feature.properties[key].hasOwnProperty(val)) {
-                                    valStr += '<li>';
-                                    valStr += val + ': ' + feature.properties[key][val];
-                                    valStr += '</li>';
-                                }
-                            }
-                            valStr += '</ul>';
-                        } else {
-                            for (const val in feature.properties[key]) {
-                                if (feature.properties[key].hasOwnProperty(val)) {
-                                    valStr += val + ': ' + feature.properties[key][val];
-                                }
-                            }
-                        }
-                        if (key === 'iso') {
-                            out.push("<b>GemKZ:</b> " + valStr);
-                        } else {
-                            out.push("<b>" + key + "</b>: " + valStr);
-                        }
-                    } else {
-                        if (key === 'iso') {
-                            out.push("<b>GemKZ</b>: " + feature.properties[key]);
-                        } else {
-                            out.push("<b>" + key + "</b>: " + feature.properties[key]);
+    // Function to determine zone from the feature data
+    function getZoneFromFeature(feature) {
+        if (!feature || !feature.properties) return null;
+        
+        // Try to determine by first digit of postal code if available
+        if (feature.properties.plz) {
+            const firstPlz = Object.keys(feature.properties.plz)[0];
+            if (firstPlz) {
+                const plzPrefix = firstPlz.substring(0, 2);
+                for (const [zone, prefixes] of Object.entries(zonePostalMapping)) {
+                    for (const prefix of prefixes) {
+                        const prefixStr = prefix.toString();
+                        if (plzPrefix.startsWith(prefixStr)) {
+                            return zone;
                         }
                     }
                 }
-                layer.bindPopup(out.join("<br />"), {maxHeight: 300});
             }
-
-            if (feature.hasOwnProperty('featureBounds')) {
-                if (feature['featureBounds']['minX'] < minX) {
-                    minX = feature['featureBounds']['minX'];
-                }
-                if (feature['featureBounds']['maxX'] > maxX) {
-                    maxX = feature['featureBounds']['maxX'];
-                }
-                if (feature['featureBounds']['minY'] < minY) {
-                    minY = feature['featureBounds']['minY'];
-                }
-                if (feature['featureBounds']['maxY'] > maxY) {
-                    maxY = feature['featureBounds']['maxY'];
-                }
-            }
-        // }))
-    }
-    
-    // Function to get the zone from the first character of color property (A-J)
-    function getZoneFromFeature(feature) {
-        if (feature && feature.properties && feature.properties.color) {
+        }
+        
+        // If we can't determine by postal code, try existing color method
+        if (feature.properties.color) {
             const colorPrefix = feature.properties.color.substring(1, 2);
-            // Check if it's a hex digit from A to J (case insensitive)
             if (/^[A-Ja-j]$/.test(colorPrefix)) {
                 return colorPrefix.toUpperCase();
             }
         }
+        
         return null;
     }
     
-    // Function to get the delivery area from a zone letter
+    // Function to get the delivery area number from a zone letter
     function getGebietFromZone(zone) {
-        for (const gebiet in deliveryZones) {
-            if (deliveryZones[gebiet].zones.includes(zone)) {
-                return gebiet;
+        for (const [gebietNum, gebietData] of Object.entries(deliveryZones)) {
+            if (gebietData.zones.includes(zone)) {
+                return gebietNum;
             }
         }
         return null;
@@ -247,12 +221,82 @@
     
     // Function to get color based on zone letter
     function getColorForZone(zone) {
-        for (const gebiet in deliveryZones) {
-            if (deliveryZones[gebiet].zones.includes(zone)) {
-                return deliveryZones[gebiet].color;
-            }
+        const gebietNum = getGebietFromZone(zone);
+        if (gebietNum && deliveryZones[gebietNum]) {
+            return deliveryZones[gebietNum].color;
         }
         return '#CCCCCC'; // Default gray color
+    }
+    
+    function popUp(feature, layer) {
+        const out = [];
+        if (feature.hasOwnProperty('properties')) {
+            // Add delivery zone info if possible
+            const zone = getZoneFromFeature(feature);
+            if (zone) {
+                const gebietNum = getGebietFromZone(zone);
+                if (gebietNum) {
+                    out.push("<b>Zone:</b> " + zone);
+                    out.push("<b>Liefergebiet:</b> " + deliveryZones[gebietNum].id);
+                }
+            }
+            
+            for (const key in feature.properties) {
+                if (key === 'color') continue;
+                if (key === 'color1') continue;
+                if (key === 'plzcolor') continue;
+                if (key === 'plzcolor1') continue;
+                if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
+                    feature.properties[key] !== null
+                ) {
+                    let valStr = '';
+                    if (Object.keys(feature.properties[key]).length > 1) {
+                        valStr += '<ul>';
+                        for (const val in feature.properties[key]) {
+                            if (feature.properties[key].hasOwnProperty(val)) {
+                                valStr += '<li>';
+                                valStr += val + ': ' + feature.properties[key][val];
+                                valStr += '</li>';
+                            }
+                        }
+                        valStr += '</ul>';
+                    } else {
+                        for (const val in feature.properties[key]) {
+                            if (feature.properties[key].hasOwnProperty(val)) {
+                                valStr += val + ': ' + feature.properties[key][val];
+                            }
+                        }
+                    }
+                    if (key === 'iso') {
+                        out.push("<b>GemKZ:</b> " + valStr);
+                    } else {
+                        out.push("<b>" + key + "</b>: " + valStr);
+                    }
+                } else {
+                    if (key === 'iso') {
+                        out.push("<b>GemKZ</b>: " + feature.properties[key]);
+                    } else {
+                        out.push("<b>" + key + "</b>: " + feature.properties[key]);
+                    }
+                }
+            }
+            layer.bindPopup(out.join("<br />"), {maxHeight: 300});
+        }
+
+        if (feature.hasOwnProperty('featureBounds')) {
+            if (feature['featureBounds']['minX'] < minX) {
+                minX = feature['featureBounds']['minX'];
+            }
+            if (feature['featureBounds']['maxX'] > maxX) {
+                maxX = feature['featureBounds']['maxX'];
+            }
+            if (feature['featureBounds']['minY'] < minY) {
+                minY = feature['featureBounds']['minY'];
+            }
+            if (feature['featureBounds']['maxY'] > maxY) {
+                maxY = feature['featureBounds']['maxY'];
+            }
+        }
     }
     
     // Add a legend to the map
@@ -264,10 +308,10 @@
             let labels = ['<strong>Liefergebiete</strong>'];
             
             // Add legend items for each delivery zone
-            for(const gebiet in deliveryZones) {
+            for(const [gebietNum, gebietData] of Object.entries(deliveryZones)) {
                 labels.push(
-                    '<i style="background:' + deliveryZones[gebiet].color + '"></i> ' +
-                    deliveryZones[gebiet].description
+                    '<i style="background:' + gebietData.color + '"></i> ' +
+                    gebietData.description
                 );
             }
             
@@ -284,10 +328,10 @@
             style: function (feature) {
                 const zone = getZoneFromFeature(feature);
                 if (zone) {
-                    // If we have a zone, use delivery zone colors
+                    // If we have a zone, use delivery zone colors with enhanced borders
                     return {
-                        'fillOpacity': 0.6,
-                        'weight': 1,
+                        'fillOpacity': 0.7,
+                        'weight': 1.5,
                         'color': '#333',
                         'fillColor': getColorForZone(zone)
                     }
@@ -298,7 +342,8 @@
                     }
                 } else {
                     return {
-                        'color': feature.properties.color
+                        'color': feature.properties.color,
+                        'fillOpacity': 0.5
                     }
                 }
             }
@@ -335,22 +380,6 @@
     plzLayer.getAttribution = function () {
         return 'RTR-GmbH – data.rtr.at';
     };
-    plzLayer.addTo(map);
-
-    // Promise.all(popUpPromises)
-    //     .then(response => {
-    //         console.log(response)
-    //         console.log("popUpPromises: " + minX + "/" + minY + " - " + maxX + "/" + maxY);
-    //         if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-    //             map.fitBounds([
-    //                 [maxY, minX],
-    //                 [minY, maxX]
-    //             ]);
-    //         }
-    //     }
-    // )
-
-
 
     if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
         map.fitBounds([
@@ -390,14 +419,12 @@
     map.on('locationfound', onLocationFound);
     map.on('locationerror', onLocationError);
 
-    //	map.locate({setView: true, maxZoom: 16});
-
     function searchFunction(val) {
         minX = Infinity;
         minY = Infinity;
         maxX = -Infinity;
         maxY = -Infinity;
-        console.log("Split: " , val.split(/[\s,;+]+/));
+        console.log("Split: ", val.split(/[\s,;+]+/));
         const lowCaseVals = val.toLowerCase().split(/[\s,;+]+/);
 
         const promises = [];
@@ -410,13 +437,13 @@
                     // Check for direct zone or gebiet search
                     const zone = getZoneFromFeature(layer.feature);
                     if (zone) {
-                        const gebiet = getGebietFromZone(zone);
+                        const gebietNum = getGebietFromZone(zone);
                         // Check if any search term matches zone letter
                         if (lowCaseVals.includes(zone.toLowerCase())) {
                             show = true;
                         }
                         // Check if any search term matches gebiet number
-                        if (gebiet && lowCaseVals.includes(gebiet.replace('Gebiet ', '').toLowerCase())) {
+                        if (gebietNum && lowCaseVals.includes(gebietNum)) {
                             show = true;
                         }
                     }
@@ -447,7 +474,7 @@
                                 break;
                             }
                         }
-                    })
+                    });
 
                     if (show) {
                         const zone = getZoneFromFeature(layer.feature);
@@ -494,7 +521,7 @@
                         });
                     }
                 }
-            }))
+            }));
         });
 
         plzLayer.eachLayer(function (layer) {
@@ -553,19 +580,19 @@
         });
 
         setTimeout(function() {
-            console.log("promises.len: " + promises.length)
+            console.log("promises.len: " + promises.length);
             if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
                 map.fitBounds([
                     [maxY, minX],
                     [minY, maxX]
                 ]);
             }
-        }, 500)
+        }, 500);
 
         Promise.all(promises)
             .then((response) => {
                 console.log("promises: " + minX + "/" + minY + " - " + maxX + "/" + maxY);
-                console.log(response)
+                console.log(response);
                 if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
                     map.fitBounds([
                         [maxY, minX],
@@ -573,14 +600,14 @@
                     ]);
                 }
             })
-            .catch(error => console.log(`Error in executing ${error}`)) // Promise.all throws an error.
+            .catch(error => console.log(`Error in executing ${error}`)); // Promise.all throws an error.
     }
 
     L.Control.textbox = L.Control.extend({
         onAdd: function () {
             const text = L.DomUtil.create('div');
             text.id = 'searchDiv';
-            text.innerHTML = '<input id="searchInput" size=10 placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
+            text.innerHTML = '<input id="searchInput" placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
             return text;
         },
 
@@ -594,7 +621,6 @@
     textbox({position: 'topleft'}).addTo(map);
 
 </script>
-
 
 </body>
 </html>
