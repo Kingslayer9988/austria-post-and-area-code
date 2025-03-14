@@ -1,4 +1,4 @@
-//**
+/**
  * zone_map.js
  * Provides visualization of Austrian postal codes by zone and delivery area (Gebiet)
  * To be used with the Austria Post and Area Code repository
@@ -10,10 +10,16 @@ const ZoneMap = {
   gebietData: null,
   plzToZoneMap: null,
   currentMode: 'zone', // 'zone' or 'gebiet'
+  currentLayer: null, // Store the current active layer
   
   // Initialize the map with zone data
   initZoneMap: function() {
     console.log('Initializing Zone Map...');
+    
+    // Clean up any existing layers
+    if (this.currentLayer && map.hasLayer(this.currentLayer)) {
+      map.removeLayer(this.currentLayer);
+    }
     
     // Load the necessary data files
     Promise.all([
@@ -27,9 +33,10 @@ const ZoneMap = {
       // Initialize the map with zone visualization
       this.renderMap();
       
-      console.log('Zone Map initialized');
+      console.log('Zone Map initialized successfully');
     }).catch(error => {
       console.error('Error loading zone data:', error);
+      alert('Error loading zone data. Please check console for details.');
     });
   },
   
@@ -45,6 +52,11 @@ const ZoneMap = {
     if (!this.plzToZoneMap || !this.zoneData || !this.gebietData) {
       console.error("Zone data not loaded yet");
       return;
+    }
+    
+    // Remove the current layer if it exists
+    if (this.currentLayer && map.hasLayer(this.currentLayer)) {
+      map.removeLayer(this.currentLayer);
     }
     
     console.log("Rendering map with mode:", this.currentMode);
@@ -112,14 +124,18 @@ const ZoneMap = {
           }
         });
         
+        // Store the current layer
+        self.currentLayer = zoneLayer;
+        
         // Add to map
         zoneLayer.addTo(map);
         
         // Update the legend
-        this.updateZoneLegend();
+        self.updateZoneLegend();
       })
       .catch(error => {
         console.error("Error loading GeoJSON data:", error);
+        alert('Failed to load map data. Please check console for details.');
       });
   },
   
@@ -180,14 +196,18 @@ const ZoneMap = {
           }
         });
         
+        // Store the current layer
+        self.currentLayer = gebietLayer;
+        
         // Add to map
         gebietLayer.addTo(map);
         
         // Update the legend
-        this.updateGebietLegend();
+        self.updateGebietLegend();
       })
       .catch(error => {
         console.error("Error loading GeoJSON data:", error);
+        alert('Failed to load map data. Please check console for details.');
       });
   },
   
@@ -278,5 +298,7 @@ const ZoneMap = {
         }
       }
     }
+  }
+};
   }
 };
