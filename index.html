@@ -401,16 +401,8 @@
 
     // Common style function for all layers
     function styleFeature(feature) {
-        const zone = determineZone(feature);
-        let color = '#CCCCCC'; // Default gray
-        
-        if (zone && zoneInfo.zones[zone]) {
-            const gebiet = zoneInfo.zones[zone].gebiet;
-            color = zoneInfo.gebiet[gebiet].color;
-        }
-        
         return {
-            'fillColor': color,
+            'fillColor': getFeatureColor(feature),
             'weight': 2,
             'opacity': 1,
             'color': '#000000',
@@ -446,70 +438,6 @@
         });
     }
 
-    // Function to detect missing postal codes
-    function detectMissingPostalCodes() {
-        console.log("Detecting missing postal codes...");
-        const missingPlz = [];
-        
-        liefergebieteLayer.eachLayer(function(layer) {
-            if (layer.feature && layer.feature.properties && layer.feature.properties.plz) {
-                let plzList = [];
-                if (typeof layer.feature.properties.plz === 'object') {
-                    plzList = Object.keys(layer.feature.properties.plz);
-                } else {
-                    plzList = [layer.feature.properties.plz.toString()];
-                }
-                
-                for (const plz of plzList) {
-                    if (!plzToZoneMap[plz]) {
-                        // Check if this postal code is genuinely missing and not matched by prefix
-                        let foundByPrefix = false;
-                        const plzPrefix3 = plz.substring(0, 3);
-                        const plzPrefix4 = plz.substring(0, 4);
-                        
-                        for (const mappedPlz in plzToZoneMap) {
-                            if (mappedPlz.startsWith(plzPrefix4) || mappedPlz.startsWith(plzPrefix3)) {
-                                foundByPrefix = true;
-                                break;
-                            }
-                        }
-                        
-                        if (!foundByPrefix) {
-                            let coords = null;
-                            if (layer.feature.geometry) {
-                                if (layer.feature.geometry.type === 'Polygon') {
-                                    coords = layer.feature.geometry.coordinates[0][0];
-                                } else if (layer.feature.geometry.type === 'MultiPolygon') {
-                                    coords = layer.feature.geometry.coordinates[0][0][0];
-                                }
-                            }
-                            
-                            missingPlz.push({
-                                plz: plz,
-                                name: layer.feature.properties.name || "Unknown",
-                                coordinates: coords
-                            });
-                        }
-                    }
-                }
-            }
-        });
-        
-        console.log("Found " + missingPlz.length + " missing postal codes");
-        console.log(JSON.stringify(missingPlz, null, 2));
-        
-        // Create a downloadable file
-        const blob = new Blob([JSON.stringify(missingPlz, null, 2)], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'missing_plz.json';
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-    }
-
     const liefergebieteLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
         {
             onEachFeature: onEachFeature,
@@ -524,9 +452,6 @@
         document.getElementById('loader').style.display = 'none';
         // Add legend after data is loaded
         addLegend();
-        
-        // Detect missing postal codes after data is loaded
-        setTimeout(detectMissingPostalCodes, 2000);
     });
     liefergebieteLayer.addTo(map);
 
@@ -566,9 +491,8 @@
     const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {
         onEachFeature: onEachFeature,
         style: function(feature) {
-            // Always use the Gebiet 1 color for Vienna
             return {
-                'fillColor': zoneInfo.gebiet["1"]?.color || '#3366CC',
+                'fillColor': zoneInfo.zones['A']?.color || '#3366CC', // Vienna is always in Zone A
                 'weight': 2,
                 'opacity': 1,
                 'color': '#000000',
