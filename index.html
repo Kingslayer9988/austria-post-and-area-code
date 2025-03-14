@@ -202,37 +202,6 @@
                         return plzToZoneMap[mappedPlz];
                     }
                 }
-                
-                // Try 1-digit match as a last resort
-                const firstDigit = plz.charAt(0);
-                switch (firstDigit) {
-                    case '1': case '2': case '3': case '7': return 'A'; // Wien + surrounding
-                    case '4': return 'D'; // Oberösterreich
-                    case '5': return 'E'; // Salzburg
-                    case '6': return plz.startsWith('6') && parseInt(plz) >= 6600 ? 'J' : 'I'; // Tirol/Vorarlberg
-                    case '8': return 'F'; // Steiermark
-                    case '9': return 'G'; // Kärnten
-                }
-            }
-        }
-        
-        // Try to extract from name if available
-        if (feature.properties.name) {
-            const name = feature.properties.name.toLowerCase();
-            if (name.includes('wien') || name.includes('vienna')) return 'A';
-            if (name.includes('niederöst') && !name.includes('süd')) return 'B';
-            if (name.includes('niederöst') && name.includes('süd')) return 'E';
-            if (name.includes('salzburg')) return 'E';
-            if (name.includes('oberöst') && name.includes('süd')) return 'D';
-            if (name.includes('oberöst') && name.includes('nord')) return 'H';
-            if (name.includes('steiermark') || name.includes('styria') || name.includes('graz')) return 'F';
-            if (name.includes('kärnten') || name.includes('carinthia') || name.includes('klagenfurt')) return 'G';
-            if (name.includes('tirol') || name.includes('innsbruck')) return 'I';
-            if (name.includes('vorarlberg') || name.includes('dornbirn') || name.includes('bregenz')) return 'J';
-        }
-        
-        return null;
-    }
     
     // Cache for zone determinations to improve performance
     const zoneCache = new Map();
