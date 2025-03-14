@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="de-AT">
 <head>
+    <title>Ortsvorwahlen und Postleitzahlen in Österreich</title><!DOCTYPE html>
+<html lang="de-AT">
+<head>
     <title>Ortsvorwahlen und Postleitzahlen in Österreich</title>
 
     <meta charset="utf-8"/>
@@ -11,11 +14,8 @@
     <script src="leaflet/leaflet.ajax.min.js"></script>
     <script src="leaflet/leaflet-hash.js"></script>
     <script src="leaflet/leaflet.CenterCross-v0.0.8.js"></script>
-    <!-- Add D3.js and jQuery libraries -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <!-- Our custom zone visualization script -->
-    <script src="js/zone_map.js"></script>
+    <script src="js/zone_integration.js"></script>
+
 
     <style>
         html, body {
@@ -42,82 +42,17 @@
             top: calc(50% - 60px);
             left: calc(50% - 60px);
         }
-        .legend-item {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 8px;
-            border: 1px solid #ccc;
-        }
-
-        .legend-label {
-            font-size: 14px;
-        }
-  
-        /* Info box styling */
-        #info-box {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background-color: rgba(255, 255, 255, 0.9);
-            border: 1px solid #ccc;
-            padding: 10px;
-            border-radius: 5px;
-            max-width: 300px;
-            z-index: 1000;
-        }
-
-        /* Visualization control styling */
-        #visualization-control {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            z-index: 1000;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        }
-
-        /* Map legend styling */
-        #map-legend {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 1000;
-        }
-
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
     </style>
 </head>
 <body>
 <div id="loader" class="loader"></div>
 <div id='map'></div>
-<div id="visualization-control">
-    <label for="visualizationType">Visualization Type:</label>
-    <select id="visualizationType" onchange="switchVisualization()">
-        <option value="area">By Area Code</option>
-        <option value="post">By Postal Code</option>
-        <option value="zone">By Zone</option>
-        <option value="gebiet">By Delivery Area (Liefergebiet)</option>
-    </select>
-</div>
-<div id="map-legend" class="map-legend"></div>
-<div id="info-box"></div>
+
 <script>
     let minX = Infinity;
     let minY = Infinity;
@@ -271,7 +206,7 @@
         }
     );
     plzLayer.getAttribution = function () {
-        return 'RTR-GmbH – data.rtr.at';
+        return 'BGO Holding GmbH - Team NOSt';
     };
     plzLayer.addTo(map);
 
@@ -330,6 +265,18 @@
 
     //	map.locate({setView: true, maxZoom: 16});
 
+<div class="form-control" id="visualization-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px;">
+  <label for="vizMode">View Mode:</label>
+  <select id="vizMode" onchange="changeVisualizationMode()">
+    <option value="vorwahl">By Area Code</option>
+    <option value="plz">By Postal Code</option>
+    <option value="zone">By Zone</option>
+    <option value="gebiet">By Delivery Area (Gebiet)</option>
+  </select>
+</div>
+
+<div id="map-legend" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;"></div>
+	
     function searchFunction(val) {
         minX = Infinity;
         minY = Infinity;
@@ -504,98 +451,11 @@
         return new L.Control.textbox(opts);
     };
     textbox({position: 'topleft'}).addTo(map);
-	
-    // Define Fake AreaMap and PostMap objects to make the existing code work
-    const AreaMap = {
-        initAreaMap: function() {
-            console.log("Area Map Selected");
-            // Show the existing vorwahl layer
-            map.addLayer(vorwahlLayer);
-            map.removeLayer(plzLayer);
-        }
-    };
-    
-    const PostMap = {
-        initPostMap: function() {
-            console.log("Post Map Selected");
-            // Show the existing plz layer
-            map.addLayer(plzLayer);
-            map.removeLayer(vorwahlLayer);
-        }
-    };
-    
-    // Function to switch between visualization types
-   // Replace the existing switchVisualization function
-function switchVisualization() {
-    const vizType = document.getElementById('visualizationType').value;
-    
-    console.log("Selected visualization type:", vizType);
-    
-    // Remove layers only if they're actually on the map
-    if (map.hasLayer(vorwahlLayer)) {
-        map.removeLayer(vorwahlLayer);
-    }
-    if (map.hasLayer(plzLayer)) {
-        map.removeLayer(plzLayer);
-    }
-    
-    // Initialize the selected visualization
-    if (vizType === 'area') {
-        // Use the existing area code visualization
-        AreaMap.initAreaMap();
-    } else if (vizType === 'post') {
-        // Use the existing postal code visualization
-        PostMap.initPostMap();
-    } else if (vizType === 'zone') {
-        // Use our new zone visualization
-        ZoneMap.setMode('zone');
-        ZoneMap.initZoneMap();
-    } else if (vizType === 'gebiet') {
-        // Use our new delivery area visualization
-        ZoneMap.setMode('gebiet');
-        ZoneMap.initZoneMap();
-    }
-}
-    
-    // Modify the DOMContentLoaded event handler
-document.addEventListener('DOMContentLoaded', function() {
-    console.log("DOM fully loaded");
-    // Initialize the default visualization (area code map)
-    document.getElementById('visualizationType').value = 'area';
-    console.log("Default visualization set to 'area'");
-    
-    // Show some debug info
-    console.log("Available visualizations:", 
-        typeof AreaMap !== 'undefined' ? "AreaMap: YES" : "AreaMap: NO",
-        typeof PostMap !== 'undefined' ? "PostMap: YES" : "PostMap: NO",
-        typeof ZoneMap !== 'undefined' ? "ZoneMap: YES" : "ZoneMap: NO"
-    );
-    
-    // Make sure your data files are accessible
-    fetch('data/nos_plz_to_zone.json')
-        .then(response => {
-            console.log("nos_plz_to_zone.json status:", response.status);
-            return response.text();
-        })
-        .then(data => {
-            console.log("nos_plz_to_zone.json first 100 chars:", data.substring(0, 100));
-        })
-        .catch(error => {
-            console.error("Error loading nos_plz_to_zone.json:", error);
-        });
-        
-    fetch('data/nos_zones.json')
-        .then(response => {
-            console.log("nos_zones.json status:", response.status);
-            return response.text();
-        })
-        .then(data => {
-            console.log("nos_zones.json first 100 chars:", data.substring(0, 100));
-        })
-        .catch(error => {
-            console.error("Error loading nos_zones.json:", error);
-        });
-});
+
 </script>
+
+
+</body>
+</html>
 </body>
 </html>
