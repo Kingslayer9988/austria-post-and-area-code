@@ -26,8 +26,8 @@
         }
 
         .loader {
-            border: 16px solid #f3f3f3; /* Light grey */
-            border-top: 16px solid #3498db; /* Blue */
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
             border-radius: 50%;
             width: 120px;
             height: 120px;
@@ -41,7 +41,7 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
+        
         .info {
             padding: 8px;
             font: 14px/16px Arial, Helvetica, sans-serif;
@@ -81,67 +81,17 @@
 <div id='map'></div>
 
 <script>
-    // Delivery zone mapping - will be loaded from external JSON file
+    // Data structures to hold zone information
     let plzToZoneMap = {};
     let zoneInfo = {
-        zones: {
-            "A": { gebiet: 1, color: "#3366CC", name: "Wien und Umgebung" },
-            "B": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordost)" },
-            "C": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordwest)" },
-            "E": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Süd), Teile von Salzburg" },
-            "D": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Süd)" },
-            "H": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Nord)" },
-            "F": { gebiet: 3, color: "#FF9900", name: "Steiermark" },
-            "G": { gebiet: 4, color: "#109618", name: "Kärnten" },
-            "I": { gebiet: 5, color: "#990099", name: "Tirol" },
-            "J": { gebiet: 6, color: "#0099C6", name: "Vorarlberg" }
-        },
-        gebiet: {
-            "1": { name: "NOS-Ausliefergebiet 1 (Zonen A, B, C, E)", color: "#3366CC" },
-            "2": { name: "NOS-Ausliefergebiet 2 (Zonen D, H)", color: "#DC3912" },
-            "3": { name: "NOS-Ausliefergebiet 3 (Zone F)", color: "#FF9900" },
-            "4": { name: "NOS-Ausliefergebiet 4 (Zone G)", color: "#109618" },
-            "5": { name: "NOS-Ausliefergebiet 5 (Zone I)", color: "#990099" },
-            "6": { name: "NOS-Ausliefergebiet 6 (Zone J)", color: "#0099C6" }
-        }
+        zones: {},
+        gebiet: {}
     };
-
-    // Initialize the PLZ to Zone mapping from a hardcoded default
-    // This will be overridden if we can load the external JSON file
-    function initializeDefaultMapping() {
-        // Basic postal codes for each zone - will be replaced with the complete list from JSON
-        plzToZoneMap = {
-            "1000": "A", "1010": "A", "1020": "A", "1030": "A", "1040": "A", 
-            "1050": "A", "1060": "A", "1070": "A", "1080": "A", "1090": "A", 
-            "1100": "A", "1110": "A", "1120": "A", "1130": "A", "1140": "A",
-            
-            "2400": "B", "2600": "B", "2800": "B", "3100": "B", "3200": "B",
-            
-            "3250": "C", "3500": "C", "3600": "C", "3800": "C", "3900": "C",
-            
-            "4000": "D", "4020": "D", "4030": "D", "4040": "D", "4050": "D",
-            
-            "7500": "E", "8000": "E", "8200": "E", "5000": "E", "5020": "E",
-            
-            "4800": "H", "4820": "H", "4840": "H", "4850": "H", "4870": "H",
-            
-            "8010": "F", "8020": "F", "8030": "F", "8040": "F", "8101": "F",
-            
-            "8750": "G", "8800": "G", "9000": "G", "9020": "G", "9100": "G",
-            
-            "6000": "I", "6020": "I", "6060": "I", "6100": "I", "6130": "I",
-            
-            "6600": "J", "6700": "J", "6800": "J", "6830": "J", "6850": "J"
-        };
-    }
-
-    // Initialize with default mapping
-    initializeDefaultMapping();
-
+    
     // Function to load external mapping
     function loadMappingData() {
-        // Try to load plzToZone.json
-        fetch('data/plzToZone.json')
+        // Try to load nos_plz_to_zone.json
+        fetch('data/nos_plz_to_zone.json')
             .then(response => response.json())
             .then(data => {
                 plzToZoneMap = data;
@@ -149,10 +99,11 @@
             })
             .catch(error => {
                 console.warn("Could not load PLZ to Zone mapping, using defaults", error);
+                initializeDefaultMapping();
             });
 
-        // Try to load zoneInfo.json
-        fetch('data/zoneInfo.json')
+        // Try to load nos_zones.json
+        fetch('data/nos_zones.json')
             .then(response => response.json())
             .then(data => {
                 zoneInfo = data;
@@ -160,9 +111,52 @@
             })
             .catch(error => {
                 console.warn("Could not load Zone info, using defaults", error);
+                initializeDefaultZoneInfo();
             });
     }
 
+    // Initialize default values if files can't be loaded
+    function initializeDefaultMapping() {
+        // Basic postal codes for each zone - would be replaced with the complete list from JSON
+        plzToZoneMap = {
+            "1000": "A", "1010": "A", "1020": "A", "2000": "A", "2500": "A",
+            "3100": "B", "3200": "B", "3300": "B", "3400": "B", 
+            "3250": "C", "3500": "C", "3600": "C", "3800": "C", "3900": "C",
+            "4000": "D", "4020": "D", "4030": "D", "4300": "D", "4400": "D",
+            "5000": "E", "5020": "E", "7400": "E", "7500": "E", "8000": "E",
+            "4800": "H", "4820": "H", "4840": "H", "4850": "H", "4870": "H",
+            "8010": "F", "8020": "F", "8030": "F", "8040": "F", "8101": "F",
+            "8800": "G", "9020": "G", "9100": "G", "9300": "G", "9400": "G",
+            "6020": "I", "6060": "I", "6100": "I", "6200": "I", "6300": "I",
+            "6600": "J", "6700": "J", "6800": "J", "6830": "J", "6850": "J"
+        };
+    }
+    
+    function initializeDefaultZoneInfo() {
+        zoneInfo = {
+            zones: {
+                "A": { gebiet: 1, color: "#3366CC", name: "Wien und Umgebung" },
+                "B": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordost)" },
+                "C": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordwest)" },
+                "E": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Süd), Teile von Salzburg" },
+                "D": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Süd)" },
+                "H": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Nord)" },
+                "F": { gebiet: 3, color: "#FF9900", name: "Steiermark" },
+                "G": { gebiet: 4, color: "#109618", name: "Kärnten" },
+                "I": { gebiet: 5, color: "#990099", name: "Tirol" },
+                "J": { gebiet: 6, color: "#0099C6", name: "Vorarlberg" }
+            },
+            gebiet: {
+                "1": { name: "NOS-Ausliefergebiet 1 (Zonen A, B, C, E)", color: "#3366CC" },
+                "2": { name: "NOS-Ausliefergebiet 2 (Zonen D, H)", color: "#DC3912" },
+                "3": { name: "NOS-Ausliefergebiet 3 (Zone F)", color: "#FF9900" },
+                "4": { name: "NOS-Ausliefergebiet 4 (Zone G)", color: "#109618" },
+                "5": { name: "NOS-Ausliefergebiet 5 (Zone I)", color: "#990099" },
+                "6": { name: "NOS-Ausliefergebiet 6 (Zone J)", color: "#0099C6" }
+            }
+        };
+    }
+    
     // Try to load the external data
     loadMappingData();
 
@@ -210,7 +204,7 @@
 
     const hash = new L.Hash(map);
 
-    // Function to determine the zone based on postal code or region
+    // Function to determine the zone based on postal code
     function determineZone(feature) {
         if (!feature || !feature.properties) return null;
         
@@ -231,30 +225,32 @@
                     return plzToZoneMap[plz];
                 }
                 
-                // Try 3-digit prefix match
-                const plzPrefix = plz.substring(0, 3);
+                // Try prefix match (first 3-4 digits)
+                const plzPrefix3 = plz.substring(0, 3);
+                const plzPrefix4 = plz.substring(0, 4);
+                
+                // First try 4-digit prefix
                 for (const mappedPlz in plzToZoneMap) {
-                    if (mappedPlz.startsWith(plzPrefix)) {
+                    if (mappedPlz.startsWith(plzPrefix4)) {
                         return plzToZoneMap[mappedPlz];
                     }
                 }
                 
-                // Try 1-digit match (just first digit - rough area)
+                // Then try 3-digit prefix
+                for (const mappedPlz in plzToZoneMap) {
+                    if (mappedPlz.startsWith(plzPrefix3)) {
+                        return plzToZoneMap[mappedPlz];
+                    }
+                }
+                
+                // Try 1-digit match as a last resort
                 const firstDigit = plz.charAt(0);
                 switch (firstDigit) {
                     case '1': case '2': case '3': case '7': return 'A'; // Wien + surrounding
                     case '4': return 'D'; // Oberösterreich
                     case '5': return 'E'; // Salzburg
-                    case '6': 
-                        if (plz.startsWith('69') || plz.startsWith('68') || plz.startsWith('67') || plz.startsWith('66')) {
-                            return 'J'; // Vorarlberg
-                        }
-                        return 'I'; // Tirol
-                    case '8': 
-                        if (plz.startsWith('87') || plz.startsWith('88')) {
-                            return 'G'; // Kärnten
-                        }
-                        return 'F'; // Steiermark
+                    case '6': return plz.startsWith('6') && parseInt(plz) >= 6600 ? 'J' : 'I'; // Tirol/Vorarlberg
+                    case '8': return 'F'; // Steiermark
                     case '9': return 'G'; // Kärnten
                 }
             }
@@ -281,13 +277,14 @@
     // Cache for zone determinations to improve performance
     const zoneCache = new Map();
     
-    // Get the color for a feature
+    // Get the color for a feature based on its gebiet (delivery area)
     function getFeatureColor(feature) {
         // Check cache first
         const featureId = feature.id || JSON.stringify(feature.properties);
         if (zoneCache.has(featureId)) {
             const cachedZone = zoneCache.get(featureId);
-            return zoneInfo.zones[cachedZone]?.color || '#CCCCCC';
+            const gebiet = zoneInfo.zones[cachedZone]?.gebiet;
+            return zoneInfo.gebiet[gebiet]?.color || '#CCCCCC';
         }
         
         // Determine zone
@@ -299,7 +296,8 @@
         }
         
         if (zone && zoneInfo.zones[zone]) {
-            return zoneInfo.zones[zone].color;
+            const gebiet = zoneInfo.zones[zone].gebiet;
+            return zoneInfo.gebiet[gebiet].color;
         }
         return '#CCCCCC'; // Default gray for unknown zones
     }
@@ -344,12 +342,16 @@
                     }
                     if (key === 'iso') {
                         out.push("<b>GemKZ:</b> " + valStr);
+                    } else if (key === 'plz') {
+                        out.push("<b>PLZ:</b> " + valStr);
                     } else {
                         out.push("<b>" + key + "</b>: " + valStr);
                     }
                 } else {
                     if (key === 'iso') {
                         out.push("<b>GemKZ</b>: " + feature.properties[key]);
+                    } else if (key === 'plz') {
+                        out.push("<b>PLZ</b>: " + feature.properties[key]);
                     } else {
                         out.push("<b>" + key + "</b>: " + feature.properties[key]);
                     }
@@ -374,7 +376,7 @@
         }
     }
     
-    // Add a legend to the map
+    // Add a legend to the map focusing on Delivery Areas (Ausliefergebiete)
     function addLegend() {
         const legend = L.control({position: 'bottomright'});
         
@@ -436,7 +438,6 @@
         });
     }
 
-    // Main layer showing delivery zones
     const liefergebieteLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
         {
             onEachFeature: onEachFeature,
@@ -454,7 +455,6 @@
     });
     liefergebieteLayer.addTo(map);
 
-    // Original PLZ layer (can be useful for comparison)
     const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
         {
             onEachFeature: popUp,
@@ -482,8 +482,7 @@
             [minY, maxX]
         ]);
     }
-
-    // Other layer options
+    
     const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json", {
         onEachFeature: onEachFeature,
         style: styleFeature
@@ -493,7 +492,7 @@
         onEachFeature: onEachFeature,
         style: function(feature) {
             return {
-                'fillColor': zoneInfo.zones['A'].color, // Vienna is always in Zone A
+                'fillColor': zoneInfo.zones['A']?.color || '#3366CC', // Vienna is always in Zone A
                 'weight': 2,
                 'opacity': 1,
                 'color': '#000000',
@@ -554,8 +553,14 @@
                     }
                     
                     // Match region name
-                    if (zone && zoneInfo.zones[zone].name && 
+                    if (zone && zoneInfo.zones[zone]?.name && 
                         zoneInfo.zones[zone].name.toLowerCase().includes(term)) {
+                        show = true;
+                    }
+                    
+                    // Match gebiet name
+                    if (gebiet && zoneInfo.gebiet[gebiet]?.name &&
+                        zoneInfo.gebiet[gebiet].name.toLowerCase().includes(term)) {
                         show = true;
                     }
                     
@@ -587,8 +592,11 @@
 
                 if (show) {
                     // Highlight feature
+                    const gebietNumber = gebiet ? gebiet : 0;
+                    const color = gebietNumber && zoneInfo.gebiet[gebietNumber] ? zoneInfo.gebiet[gebietNumber].color : '#CCCCCC';
+                    
                     layer.setStyle({
-                        'fillColor': zone ? zoneInfo.zones[zone].color : '#CCCCCC',
+                        'fillColor': color,
                         'fillOpacity': 0.8,
                         'weight': 3,
                         'color': '#000'
