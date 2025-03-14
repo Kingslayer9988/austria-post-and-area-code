@@ -11,8 +11,11 @@
     <script src="leaflet/leaflet.ajax.min.js"></script>
     <script src="leaflet/leaflet-hash.js"></script>
     <script src="leaflet/leaflet.CenterCross-v0.0.8.js"></script>
-	<script src="js/zone_map.js"></script>
-
+    <!-- Add D3.js and jQuery libraries -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Our custom zone visualization script -->
+    <script src="js/zone_map.js"></script>
 
     <style>
         html, body {
@@ -39,54 +42,82 @@
             top: calc(50% - 60px);
             left: calc(50% - 60px);
         }
-		.legend-item {
-			display: flex;
-			align-items: center;
-			margin-bottom: 5px;
-		}
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
 
-		.legend-color {
-			width: 20px;
-			height: 20px;
-			margin-right: 8px;
-			border: 1px solid #ccc;
-		}
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #ccc;
+        }
 
-		.legend-label {
-			font-size: 14px;
-		}
+        .legend-label {
+            font-size: 14px;
+        }
   
-		/* Info box styling */
-		#info-box {
-			position: absolute;
-			bottom: 20px;
-			left: 20px;
-			background-color: rgba(255, 255, 255, 0.9);
-			border: 1px solid #ccc;
-			padding: 10px;
-			border-radius: 5px;
-			max-width: 300px;
-			z-index: 1000;
-		}
+        /* Info box styling */
+        #info-box {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 300px;
+            z-index: 1000;
+        }
+
+        /* Visualization control styling */
+        #visualization-control {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+
+        /* Map legend styling */
+        #map-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
-		}
-
+        }
     </style>
 </head>
 <body>
 <div id="loader" class="loader"></div>
 <div id='map'></div>
-<div class="form-group" id="visualization-control">
-  <label for="visualizationType">Visualization Type:</label>
-  <select class="form-control" id="visualizationType" onchange="switchVisualization()">
-    <option value="area">By Area Code</option>
-    <option value="post">By Postal Code</option>
-    <option value="zone">By Zone</option>
-    <option value="gebiet">By Delivery Area (Liefergebiet)</option>
-  </select>
+<div id="visualization-control">
+    <label for="visualizationType">Visualization Type:</label>
+    <select id="visualizationType" onchange="switchVisualization()">
+        <option value="area">By Area Code</option>
+        <option value="post">By Postal Code</option>
+        <option value="zone">By Zone</option>
+        <option value="gebiet">By Delivery Area (Liefergebiet)</option>
+    </select>
 </div>
+<div id="map-legend" class="map-legend"></div>
+<div id="info-box"></div>
 <script>
     let minX = Infinity;
     let minY = Infinity;
@@ -474,77 +505,61 @@
     };
     textbox({position: 'topleft'}).addTo(map);
 	
-	 function switchVisualization() {
-    const vizType = document.getElementById('visualizationType').value;
+    // Define Fake AreaMap and PostMap objects to make the existing code work
+    const AreaMap = {
+        initAreaMap: function() {
+            console.log("Area Map Selected");
+            // Show the existing vorwahl layer
+            map.addLayer(vorwahlLayer);
+            map.removeLayer(plzLayer);
+        }
+    };
     
-    // Clear any existing visualization
-    d3.selectAll("path.plz").style("fill", "#ffffff");
+    const PostMap = {
+        initPostMap: function() {
+            console.log("Post Map Selected");
+            // Show the existing plz layer
+            map.addLayer(plzLayer);
+            map.removeLayer(vorwahlLayer);
+        }
+    };
     
-    // Initialize the selected visualization
-    if (vizType === 'area') {
-      // Use the existing area code visualization
-      AreaMap.initAreaMap();
-    } else if (vizType === 'post') {
-      // Use the existing postal code visualization
-      PostMap.initPostMap();
-    } else if (vizType === 'zone') {
-      // Use our new zone visualization
-      ZoneMap.setMode('zone');
-      ZoneMap.initZoneMap();
-    } else if (vizType === 'gebiet') {
-      // Use our new delivery area visualization
-      ZoneMap.setMode('gebiet');
-      ZoneMap.initZoneMap();
+    // Function to switch between visualization types
+    function switchVisualization() {
+        const vizType = document.getElementById('visualizationType').value;
+        
+        console.log("Selected visualization type:", vizType);
+        
+        // Remove all layers first
+        map.removeLayer(vorwahlLayer);
+        map.removeLayer(plzLayer);
+        
+        // Initialize the selected visualization
+        if (vizType === 'area') {
+            // Use the existing area code visualization
+            AreaMap.initAreaMap();
+        } else if (vizType === 'post') {
+            // Use the existing postal code visualization
+            PostMap.initPostMap();
+        } else if (vizType === 'zone') {
+            // Use our new zone visualization
+            ZoneMap.setMode('zone');
+            ZoneMap.initZoneMap();
+        } else if (vizType === 'gebiet') {
+            // Use our new delivery area visualization
+            ZoneMap.setMode('gebiet');
+            ZoneMap.initZoneMap();
+        }
     }
     
-    // Update UI based on visualization type
-    updateUIForVisualization(vizType);
-  }
-  
-  // Function to update the UI elements based on the current visualization
-  function updateUIForVisualization(vizType) {
-    // Hide all special UI elements
-    document.querySelectorAll('.viz-specific-controls').forEach(el => {
-      el.style.display = 'none';
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the default visualization (area code map)
+        document.getElementById('visualizationType').value = 'area';
+        
+        // Add hover effects for postal codes if needed
+        // This would need to be implemented in a way that works with the GeoJSON layers
     });
-    
-    // Show specific controls for the selected visualization
-    if (vizType === 'area' || vizType === 'post') {
-      // Show original controls for the existing visualizations
-      document.querySelectorAll(`.${vizType}-controls`).forEach(el => {
-        el.style.display = 'block';
-      });
-    } else {
-      // Show controls for our new zone/gebiet visualizations
-      document.querySelectorAll('.zone-controls').forEach(el => {
-        el.style.display = 'block';
-      });
-    }
-  }
-  
-  // Initialize the page
-  document.addEventListener('DOMContentLoaded', function() {
-    // Initialize the default visualization (area code map)
-    AreaMap.initAreaMap();
-    
-    // Add event listeners for hover effects on postal code areas
-    d3.selectAll("path.plz").on("mouseover", function() {
-      const vizType = document.getElementById('visualizationType').value;
-      
-      if (vizType === 'zone' || vizType === 'gebiet') {
-        ZoneMap.handleHover(d3.select(this), true);
-      }
-    }).on("mouseout", function() {
-      const vizType = document.getElementById('visualizationType').value;
-      
-      if (vizType === 'zone' || vizType === 'gebiet') {
-        ZoneMap.handleHover(d3.select(this), false);
-      }
-    });
-  });
-
 </script>
-	<div id="map-legend" class="map-legend"></div>
-	<div id="info-box"></div>
 </body>
 </html>
