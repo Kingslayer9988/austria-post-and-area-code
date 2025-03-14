@@ -525,41 +525,77 @@
     };
     
     // Function to switch between visualization types
-    function switchVisualization() {
-        const vizType = document.getElementById('visualizationType').value;
-        
-        console.log("Selected visualization type:", vizType);
-        
-        // Remove all layers first
+   // Replace the existing switchVisualization function
+function switchVisualization() {
+    const vizType = document.getElementById('visualizationType').value;
+    
+    console.log("Selected visualization type:", vizType);
+    
+    // Remove layers only if they're actually on the map
+    if (map.hasLayer(vorwahlLayer)) {
         map.removeLayer(vorwahlLayer);
+    }
+    if (map.hasLayer(plzLayer)) {
         map.removeLayer(plzLayer);
-        
-        // Initialize the selected visualization
-        if (vizType === 'area') {
-            // Use the existing area code visualization
-            AreaMap.initAreaMap();
-        } else if (vizType === 'post') {
-            // Use the existing postal code visualization
-            PostMap.initPostMap();
-        } else if (vizType === 'zone') {
-            // Use our new zone visualization
-            ZoneMap.setMode('zone');
-            ZoneMap.initZoneMap();
-        } else if (vizType === 'gebiet') {
-            // Use our new delivery area visualization
-            ZoneMap.setMode('gebiet');
-            ZoneMap.initZoneMap();
-        }
     }
     
-    // Initialize the page
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize the default visualization (area code map)
-        document.getElementById('visualizationType').value = 'area';
+    // Initialize the selected visualization
+    if (vizType === 'area') {
+        // Use the existing area code visualization
+        AreaMap.initAreaMap();
+    } else if (vizType === 'post') {
+        // Use the existing postal code visualization
+        PostMap.initPostMap();
+    } else if (vizType === 'zone') {
+        // Use our new zone visualization
+        ZoneMap.setMode('zone');
+        ZoneMap.initZoneMap();
+    } else if (vizType === 'gebiet') {
+        // Use our new delivery area visualization
+        ZoneMap.setMode('gebiet');
+        ZoneMap.initZoneMap();
+    }
+}
+    
+    // Modify the DOMContentLoaded event handler
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("DOM fully loaded");
+    // Initialize the default visualization (area code map)
+    document.getElementById('visualizationType').value = 'area';
+    console.log("Default visualization set to 'area'");
+    
+    // Show some debug info
+    console.log("Available visualizations:", 
+        typeof AreaMap !== 'undefined' ? "AreaMap: YES" : "AreaMap: NO",
+        typeof PostMap !== 'undefined' ? "PostMap: YES" : "PostMap: NO",
+        typeof ZoneMap !== 'undefined' ? "ZoneMap: YES" : "ZoneMap: NO"
+    );
+    
+    // Make sure your data files are accessible
+    fetch('data/nos_plz_to_zone.json')
+        .then(response => {
+            console.log("nos_plz_to_zone.json status:", response.status);
+            return response.text();
+        })
+        .then(data => {
+            console.log("nos_plz_to_zone.json first 100 chars:", data.substring(0, 100));
+        })
+        .catch(error => {
+            console.error("Error loading nos_plz_to_zone.json:", error);
+        });
         
-        // Add hover effects for postal codes if needed
-        // This would need to be implemented in a way that works with the GeoJSON layers
-    });
+    fetch('data/nos_zones.json')
+        .then(response => {
+            console.log("nos_zones.json status:", response.status);
+            return response.text();
+        })
+        .then(data => {
+            console.log("nos_zones.json first 100 chars:", data.substring(0, 100));
+        })
+        .catch(error => {
+            console.error("Error loading nos_zones.json:", error);
+        });
+});
 </script>
 </body>
 </html>
