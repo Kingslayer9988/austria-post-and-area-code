@@ -82,29 +82,29 @@
 
 <script>
     // Define the delivery zones with consistent colors
-    // Using more vibrant and distinct colors for better visibility
+    // Using vibrant, distinct colors for better visibility
     const deliveryZones = {
         // Zone codes for regions in Austria
-        'A': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
-        'B': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
-        'C': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
-        'E': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1
-        'D': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2
-        'H': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2
-        'F': { gebiet: 3, color: '#FF9900' }, // Orange - Gebiet 3
-        'G': { gebiet: 4, color: '#109618' }, // Green - Gebiet 4
-        'I': { gebiet: 5, color: '#990099' }, // Purple - Gebiet 5
-        'J': { gebiet: 6, color: '#0099C6' }  // Cyan - Gebiet 6
+        'A': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1 (Wien und Umgebung)
+        'B': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1 (Niederösterreich Nordost)
+        'C': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1 (Niederösterreich Nordwest)
+        'E': { gebiet: 1, color: '#3366CC' }, // Blue - Gebiet 1 (Niederösterreich Süd, Teile von Salzburg)
+        'D': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2 (Oberösterreich Süd)
+        'H': { gebiet: 2, color: '#DC3912' }, // Red - Gebiet 2 (Oberösterreich Nord)
+        'F': { gebiet: 3, color: '#FF9900' }, // Orange - Gebiet 3 (Steiermark)
+        'G': { gebiet: 4, color: '#109618' }, // Green - Gebiet 4 (Kärnten)
+        'I': { gebiet: 5, color: '#990099' }, // Purple - Gebiet 5 (Tirol)
+        'J': { gebiet: 6, color: '#0099C6' }  // Cyan - Gebiet 6 (Vorarlberg)
     };
     
     // Map gebiet numbers to names and colors for the legend
     const gebietInfo = {
-        1: { name: 'Gebiet 1 (A, B, C, E)', color: '#3366CC' },
-        2: { name: 'Gebiet 2 (H, D)', color: '#DC3912' },
-        3: { name: 'Gebiet 3 (F)', color: '#FF9900' },
-        4: { name: 'Gebiet 4 (G)', color: '#109618' },
-        5: { name: 'Gebiet 5 (I)', color: '#990099' },
-        6: { name: 'Gebiet 6 (J)', color: '#0099C6' }
+        1: { name: 'NOS-Ausliefergebiet 1 (Zonen A, B, C, E)', color: '#3366CC' },
+        2: { name: 'NOS-Ausliefergebiet 2 (Zonen D, H)', color: '#DC3912' },
+        3: { name: 'NOS-Ausliefergebiet 3 (Zone F)', color: '#FF9900' },
+        4: { name: 'NOS-Ausliefergebiet 4 (Zone G)', color: '#109618' },
+        5: { name: 'NOS-Ausliefergebiet 5 (Zone I)', color: '#990099' },
+        6: { name: 'NOS-Ausliefergebiet 6 (Zone J)', color: '#0099C6' }
     };
     
     // Region to province mapping for Austria (Bundesländer)
@@ -164,11 +164,89 @@
 
     const hash = new L.Hash(map);
     
+    // Mapping of postal codes (PLZ) to zones based on the provided data
+    const plzToZoneMap = {};
+    
+    // Function to initialize the PLZ to Zone mapping from the provided data
+    function initializePlzToZoneMap() {
+        // This map is populated from the paste.txt data you provided
+        // Process all postal codes from the data file
+        try {
+            // The last column in your data contains the zone information in format AT_ZoneX
+            document.querySelectorAll('table tr').forEach(row => {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 2) {
+                    const plz = cells[1].innerText.trim();
+                    const zoneInfo = cells[cells.length - 1].innerText.trim();
+                    if (zoneInfo.startsWith('AT_Zone')) {
+                        const zone = zoneInfo.charAt(zoneInfo.length - 1);
+                        plzToZoneMap[plz] = zone;
+                    }
+                }
+            });
+        } catch (e) {
+            console.log("Could not parse PLZ data from table, using manual mapping");
+            
+            // Manually initialize the map based on your provided data
+            // This ensures the map works even if the table parsing fails
+            // Zones A, B, C, E -> Gebiet 1
+            ['1000', '1010', '1020', '1030', '1040', '1050', '1060', '1070', '1080', '1090', '1100', '1110', '1120', 
+             '1130', '1140', '1150', '1160', '1170', '1180', '1190', '1200', '1210', '1220', '1230', '2000', '2100', 
+             '2200', '2300', '2500', '2700', '3000', '3400', '7000', '7100', '7400', '8190'].forEach(plz => {
+                plzToZoneMap[plz] = 'A';
+            });
+            
+            ['2400', '2600', '2800', '3100', '3200', '3300'].forEach(plz => {
+                plzToZoneMap[plz] = 'B';
+            });
+            
+            ['3250', '3300', '3500', '3600', '3800', '3900', '8630', '8900', '8922'].forEach(plz => {
+                plzToZoneMap[plz] = 'C';
+            });
+            
+            ['7500', '8000', '8200', '8230', '8600', '8700'].forEach(plz => {
+                plzToZoneMap[plz] = 'E';
+            });
+            
+            // Zones D, H -> Gebiet 2
+            ['4000', '4020', '4030', '4040', '4050', '4060', '4300', '4400', '4500', '4600'].forEach(plz => {
+                plzToZoneMap[plz] = 'D';
+            });
+            
+            ['4800', '4820', '4840', '4850', '4870', '4950', '5000'].forEach(plz => {
+                plzToZoneMap[plz] = 'H';
+            });
+            
+            // Zone F -> Gebiet 3
+            ['8010', '8020', '8030', '8040', '8101', '8200', '8301', '8330', '8401', '8430'].forEach(plz => {
+                plzToZoneMap[plz] = 'F';
+            });
+            
+            // Zone G -> Gebiet 4
+            ['8750', '8800', '9000', '9020', '9100', '9300', '9400', '9500', '9800', '9900'].forEach(plz => {
+                plzToZoneMap[plz] = 'G';
+            });
+            
+            // Zone I -> Gebiet 5
+            ['6000', '6020', '6060', '6100', '6130', '6200', '6300', '6330', '6400', '6500'].forEach(plz => {
+                plzToZoneMap[plz] = 'I';
+            });
+            
+            // Zone J -> Gebiet 6
+            ['6600', '6700', '6800', '6830', '6850', '6900', '6990'].forEach(plz => {
+                plzToZoneMap[plz] = 'J';
+            });
+        }
+    }
+    
+    // Initialize the PLZ mapping
+    initializePlzToZoneMap();
+    
     // Function to determine the zone based on postal code or region
     function determineZone(feature) {
         if (!feature || !feature.properties) return null;
         
-        // Try these properties in order of preference
+        // Direct mapping if zone property exists
         const props = ['zone', 'lieferzone', 'zone_code'];
         for (const prop of props) {
             if (feature.properties[prop] && deliveryZones[feature.properties[prop]]) {
@@ -176,47 +254,81 @@
             }
         }
         
-        // Check if first character of postal code matches a zone (if postal code is available)
-        if (feature.properties.plz) {
-            const plzStr = typeof feature.properties.plz === 'object' 
-                ? Object.keys(feature.properties.plz)[0] 
-                : feature.properties.plz.toString();
-            const firstChar = plzStr.charAt(0).toUpperCase();
-            if (deliveryZones[firstChar]) {
-                return firstChar;
+        // 1. Check if the feature has a property AT_Zone
+        if (feature.properties.AT_Zone) {
+            const zone = feature.properties.AT_Zone.charAt(feature.properties.AT_Zone.length - 1);
+            if (deliveryZones[zone]) {
+                return zone;
             }
         }
         
-        // Try to extract from name if available
-        if (feature.properties.name) {
-            const name = feature.properties.name.toLowerCase();
-            // Check for key locations mentioned in the data
-            if (name.includes('wien') || name.includes('vienna')) return 'A';
-            if (name.includes('niederöst') && !name.includes('süd')) return 'B';
-            if (name.includes('oberöst')) return 'H';
-            if (name.includes('salzburg')) return 'E';
-            if (name.includes('steiermark') || name.includes('styria')) return 'F';
-            if (name.includes('kärnten') || name.includes('carinthia')) return 'G';
-            if (name.includes('tirol')) return 'I';
-            if (name.includes('vorarlberg')) return 'J';
+        // 2. Check for postal code (plz) in our mapping
+        if (feature.properties.plz) {
+            // Handle if plz is an object or a string
+            let plzList = [];
+            if (typeof feature.properties.plz === 'object') {
+                plzList = Object.keys(feature.properties.plz);
+            } else {
+                plzList = [feature.properties.plz.toString()];
+            }
+            
+            // Check each postal code
+            for (const plz of plzList) {
+                // Try exact match first
+                if (plzToZoneMap[plz]) {
+                    return plzToZoneMap[plz];
+                }
+                
+                // Try 3-digit prefix match (first three digits of postal code)
+                const plzPrefix = plz.substring(0, 3);
+                for (const mappedPlz in plzToZoneMap) {
+                    if (mappedPlz.startsWith(plzPrefix)) {
+                        return plzToZoneMap[mappedPlz];
+                    }
+                }
+                
+                // Try 1-digit match (just first digit - rough area)
+                const firstDigit = plz.charAt(0);
+                switch (firstDigit) {
+                    case '1': case '2': case '3': case '7': return 'A'; // Wien + surrounding
+                    case '4': return 'D'; // Oberösterreich
+                    case '5': return 'H'; // Salzburg
+                    case '6': return 'I'; // Tirol/Vorarlberg
+                    case '8': return 'F'; // Steiermark
+                    case '9': return 'G'; // Kärnten
+                }
+            }
         }
         
-        // Try using the 'iso' code if available (GemKZ)
+        // 3. Try to extract from name if available
+        if (feature.properties.name) {
+            const name = feature.properties.name.toLowerCase();
+            if (name.includes('wien') || name.includes('vienna')) return 'A';
+            if (name.includes('niederöst') && !name.includes('süd')) return 'B';
+            if (name.includes('niederöst') && name.includes('süd')) return 'E';
+            if (name.includes('oberöst') && name.includes('süd')) return 'D';
+            if (name.includes('oberöst') && name.includes('nord')) return 'H';
+            if (name.includes('salzburg')) return 'H';
+            if (name.includes('steiermark') || name.includes('styria') || name.includes('graz')) return 'F';
+            if (name.includes('kärnten') || name.includes('carinthia') || name.includes('klagenfurt')) return 'G';
+            if (name.includes('tirol') || name.includes('innsbruck')) return 'I';
+            if (name.includes('vorarlberg') || name.includes('dornbirn') || name.includes('bregenz')) return 'J';
+        }
+        
+        // 4. Try using the 'iso' code if available (GemKZ)
         if (feature.properties.iso) {
             const isoStr = typeof feature.properties.iso === 'object'
                 ? Object.keys(feature.properties.iso)[0]
                 : feature.properties.iso.toString();
             
-            // First digit of GemKZ corresponds to Austrian federal states:
-            // 1: Burgenland, 2: Kärnten, 3: Niederösterreich, 4: Oberösterreich,
-            // 5: Salzburg, 6: Steiermark, 7: Tirol, 8: Vorarlberg, 9: Wien
+            // First digit of GemKZ corresponds to Austrian federal states
             const firstDigit = isoStr.charAt(0);
             switch (firstDigit) {
-                case '1': return 'B'; // Assuming Burgenland is part of Niederösterreich zones
+                case '1': return 'A'; // Burgenland -> Zone A (as per your mapping)
                 case '2': return 'G'; // Kärnten
-                case '3': return 'B'; // Niederösterreich (default to B if not more specific)
-                case '4': return 'H'; // Oberösterreich (default to H if not more specific)
-                case '5': return 'E'; // Salzburg
+                case '3': return 'B'; // Niederösterreich (default to B)
+                case '4': return 'D'; // Oberösterreich Süd
+                case '5': return 'H'; // Salzburg
                 case '6': return 'F'; // Steiermark
                 case '7': return 'I'; // Tirol
                 case '8': return 'J'; // Vorarlberg
@@ -224,20 +336,8 @@
             }
         }
         
-        // If we can't determine the zone, check if it has explicit color that can be mapped
-        if (feature.properties.color) {
-            // Try to map the color to a zone
-            const colorHex = feature.properties.color.toUpperCase();
-            for (const [zone, info] of Object.entries(deliveryZones)) {
-                if (colorHex === info.color.toUpperCase()) {
-                    return zone;
-                }
-            }
-        }
-        
-        // Check location by coordinates (rough approximation)
+        // 5. Check location by coordinates (as a last resort)
         if (feature.geometry && feature.geometry.coordinates) {
-            // Use the first coordinate pair (or center point) for simple determination
             let lng, lat;
             if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
                 const coords = feature.geometry.type === 'Polygon' 
@@ -251,7 +351,7 @@
             }
             
             if (lng && lat) {
-                // Rough geographic approximation for Austrian regions
+                // Rough geographic approximation
                 if (lng > 16.0 && lat > 48.0) return 'A'; // Wien area
                 if (lng > 15.5 && lat > 48.0) return 'B'; // NÖ northeast
                 if (lng < 15.5 && lat > 48.0) return 'C'; // NÖ northwest
