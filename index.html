@@ -401,14 +401,22 @@
 
     // Common style function for all layers
     function styleFeature(feature) {
-        return {
-            'fillColor': getFeatureColor(feature),
-            'weight': 2,
-            'opacity': 1,
-            'color': '#000000',
-            'fillOpacity': 0.7,
-            'dashArray': ''
-        };
+    const zone = determineZone(feature);
+    let color = '#CCCCCC'; // Default gray
+    
+    if (zone && zoneInfo.zones[zone]) {
+        const gebiet = zoneInfo.zones[zone].gebiet;
+        color = zoneInfo.gebiet[gebiet].color;
+    }
+    
+    return {
+        'fillColor': color,
+        'weight': 2,
+        'opacity': 1,
+        'color': '#000000',
+        'fillOpacity': 0.7,
+        'dashArray': ''
+    };
     }
     
     // Highlight feature on mouseover
@@ -489,14 +497,15 @@
     });
     
     const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {
-        onEachFeature: onEachFeature,
-        style: function(feature) {
-            return {
-                'fillColor': zoneInfo.zones['A']?.color || '#3366CC', // Vienna is always in Zone A
-                'weight': 2,
-                'opacity': 1,
-                'color': '#000000',
-                'fillOpacity': 0.7
+    onEachFeature: onEachFeature,
+    style: function(feature) {
+        // Always use the Gebiet 1 color for Vienna
+        return {
+            'fillColor': zoneInfo.gebiet["1"]?.color || '#3366CC',
+            'weight': 2,
+            'opacity': 1,
+            'color': '#000000',
+            'fillOpacity': 0.7
             };
         }
     });
