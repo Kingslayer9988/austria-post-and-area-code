@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="de-AT">
 <head>
-    <title>Ortsvorwahlen und Postleitzahlen in Österreich</title>
+    <title>Liefergebietszuordnung für Dispatcher</title>
 
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,7 +11,6 @@
     <script src="leaflet/leaflet.ajax.min.js"></script>
     <script src="leaflet/leaflet-hash.js"></script>
     <script src="leaflet/leaflet.CenterCross-v0.0.8.js"></script>
-    <script src="js/zone_integration.js"></script>
 
     <style>
         html, body {
@@ -27,8 +26,8 @@
         }
 
         .loader {
-            border: 16px solid #f3f3f3; /* Light grey */
-            border-top: 16px solid #3498db; /* Blue */
+            border: 16px solid #f3f3f3;
+            border-top: 16px solid #3498db;
             border-radius: 50%;
             width: 120px;
             height: 120px;
@@ -42,32 +41,58 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
+        
+        .info {
+            padding: 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255,255,255,0.9);
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border-radius: 5px;
+        }
+        
+        .legend {
+            text-align: left;
+            line-height: 24px;
+            color: #555;
+        }
+        
+        .legend i {
+            width: 20px;
+            height: 20px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.85;
+            border: 1px solid #333;
+        }
+        
+        #searchInput {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 200px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
 <div id="loader" class="loader"></div>
-<div class="form-control" id="visualization-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px;">
-  <label for="vizMode">View Mode:</label>
-  <select id="vizMode" onchange="changeVisualizationMode()">
-    <option value="vorwahl">By Area Code</option>
-    <option value="plz">By Postal Code</option>
-    <option value="zone">By Zone</option>
-    <option value="gebiet">By Delivery Area (Gebiet)</option>
-  </select>
-</div>
-
-<div id="map-legend" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;"></div>
 <div id='map'></div>
 
 <script>
+    // Data structures to hold zone information
+    let plzToZoneMap = {};
+    let zoneInfo = {
+        zones: {},
+        gebiet: {}
+    };
+    
+    // Map setup
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-
-    let zoneLayer = null;
-    let gebietLayer = null;
 
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png', {
         maxZoom: 18,
@@ -99,7 +124,6 @@
     });
     map.doubleClickZoom.disable();
 
-
     const mapLayers = {
         "Open Street Map": osm,
         "Basemap.at": basemap,
@@ -107,15 +131,105 @@
     };
 
     const hash = new L.Hash(map);
+    
+    // Function to load external mapping
+    function loadMappingData() {
+        // Try to load nos_plz_to_zone.json
+        fetch('data/nos_plz_to_zone.json')
+            .then(response => response.json())
+            .then(data => {
+                plzToZoneMap = data;
+                console.log("PLZ to Zone mapping loaded from file");
+                initializeApp();
+            })
+            .catch(error => {
+                console.error("Could not load PLZ to Zone mapping:", error);
+                document.getElementById('loader').style.display = 'none';
+                alert("Error loading postal code data. Please check the console for details.");
+            });
+
+        // Try to load nos_zones.json
+        fetch('data/nos_zones.json')
+            .then(response => response.json())
+            .then(data => {
+                zoneInfo = data;
+                console.log("Zone info loaded from file");
+            })
+            .catch(error => {
+                console.error("Could not load Zone info:", error);
+            });
+    }
+
+    // Function to determine the zone based on postal code
+    function determineZone(feature) {
+        if (!feature || !feature.properties) return null;
+        
+        // Check for postal code (plz) in our mapping
+        if (feature.properties.plz) {
+            // Handle if plz is an object or a string
+            let plzList = [];
+            if (typeof feature.properties.plz === 'object') {
+                plzList = Object.keys(feature.properties.plz);
+            } else {
+                plzList = [feature.properties.plz.toString()];
+            }
+            
+            // Check each postal code
+            for (const plz of plzList) {
+                // Try exact match
+                if (plzToZoneMap[plz]) {
+                    return plzToZoneMap[plz];
+                }
+            }
+        }
+        return null;
+    }
+
+    // Cache for zone determinations to improve performance
+    const zoneCache = new Map();
+    
+    // Get the color for a feature based on its gebiet (delivery area)
+    function getFeatureColor(feature) {
+        // Check cache first
+        const featureId = feature.id || JSON.stringify(feature.properties);
+        if (zoneCache.has(featureId)) {
+            const cachedZone = zoneCache.get(featureId);
+            const gebiet = zoneInfo.zones[cachedZone]?.gebiet;
+            return zoneInfo.gebiet[gebiet]?.color || '#CCCCCC';
+        }
+        
+        // Determine zone
+        const zone = determineZone(feature);
+        
+        // Cache the result
+        if (zone) {
+            zoneCache.set(featureId, zone);
+        }
+        
+        if (zone && zoneInfo.zones[zone]) {
+            const gebiet = zoneInfo.zones[zone].gebiet;
+            return zoneInfo.gebiet[gebiet].color;
+        }
+        return '#CCCCCC'; // Default gray for unknown zones
+    }
 
     function popUp(feature, layer) {
         const out = [];
         if (feature.hasOwnProperty('properties')) {
+            // Add delivery zone info
+            const zone = determineZone(feature);
+            if (zone) {
+                const gebiet = zoneInfo.zones[zone]?.gebiet;
+                out.push("<b>Zone:</b> " + zone);
+                out.push("<b>Liefergebiet:</b> " + zoneInfo.gebiet[gebiet].name);
+                out.push("<b>Region:</b> " + zoneInfo.zones[zone].name);
+            }
+            
+            // Add other feature properties
             for (const key in feature.properties) {
-                if (key === 'color') continue;
-                if (key === 'color1') continue;
-                if (key === 'plzcolor') continue;
-                if (key === 'plzcolor1') continue;
+                // Skip certain technical properties
+                if (key === 'color' || key === 'color1' || key === 'plzcolor' || key === 'plzcolor1') continue;
+                
                 if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
                     feature.properties[key] !== null
                 ) {
@@ -139,12 +253,16 @@
                     }
                     if (key === 'iso') {
                         out.push("<b>GemKZ:</b> " + valStr);
+                    } else if (key === 'plz') {
+                        out.push("<b>PLZ:</b> " + valStr);
                     } else {
                         out.push("<b>" + key + "</b>: " + valStr);
                     }
                 } else {
                     if (key === 'iso') {
                         out.push("<b>GemKZ</b>: " + feature.properties[key]);
+                    } else if (key === 'plz') {
+                        out.push("<b>PLZ</b>: " + feature.properties[key]);
                     } else {
                         out.push("<b>" + key + "</b>: " + feature.properties[key]);
                     }
@@ -168,336 +286,286 @@
             }
         }
     }
-
-    const vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
-        {
-            onEachFeature: popUp,
-            style: function (feature) {
-                if (feature.properties.color === undefined) {
-                    return {
-                        'fillOpacity': 0,
-                        'color': 'rgba(0,0,0,0)'
-                    }
-                } else {
-                    return {
-                        'color': feature.properties.color
-                    }
-                }
+    
+    // Add a legend to the map focusing on Delivery Areas (Ausliefergebiete)
+    function addLegend() {
+        const legend = L.control({position: 'bottomright'});
+        
+        legend.onAdd = function(map) {
+            const div = L.DomUtil.create('div', 'info legend');
+            let labels = ['<strong>Liefergebiete</strong>'];
+            
+            // Add legend items for each gebiet
+            for(const [gebietNum, info] of Object.entries(zoneInfo.gebiet)) {
+                labels.push(
+                    '<i style="background:' + info.color + '"></i> ' +
+                    info.name
+                );
             }
-        }
-    );
-    vorwahlLayer.getAttribution = function () {
-        return 'BGO Holding GmbH - Team NOS';
-    };
-    vorwahlLayer.addEventListener('data:loaded', function () {
-        console.log("Data loaded...");
-        document.getElementById('loader').style.display = 'none';
-    });
-    vorwahlLayer.addTo(map);
+            
+            div.innerHTML = labels.join('<br>');
+            return div;
+        };
+        
+        legend.addTo(map);
+    }
 
-    const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
-        {
-            onEachFeature: popUp,
-            style: function (feature) {
-                if (feature.properties['plzcolor'] === undefined) {
-                    return {
-                        'fillOpacity': 0,
-                        'color': 'rgba(0,0,0,0)'
-                    }
-                } else {
-                    return {
-                        'color': feature.properties['plzcolor']
-                    }
-                }
+    // Common style function for all layers
+    function styleFeature(feature) {
+        return {
+            'fillColor': getFeatureColor(feature),
+            'weight': 2,
+            'opacity': 1,
+            'color': '#000000',
+            'fillOpacity': 0.7,
+            'dashArray': ''
+        };
+    }
+    
+    // Highlight feature on mouseover
+    function highlightFeature(e) {
+        const layer = e.target;
+        layer.setStyle({
+            'weight': 3,
+            'color': '#FFFFFF',
+            'dashArray': '',
+            'fillOpacity': 0.8
+        });
+        layer.bringToFront();
+    }
+    
+    // Reset highlight on mouseout
+    function resetHighlight(e) {
+        const layer = e.target;
+        layer.setStyle(styleFeature(layer.feature));
+    }
+    
+    // Set up interactions for each feature
+    function onEachFeature(feature, layer) {
+        popUp(feature, layer);
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+    }
+
+    function initializeApp() {
+        const liefergebieteLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
+            {
+                onEachFeature: onEachFeature,
+                style: styleFeature
             }
-        }
-    );
-    plzLayer.getAttribution = function () {
-        return 'BGO Holding GmbH - Team NOS';
-    };
-
-    if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-        map.fitBounds([
-            [maxY, minX],
-            [minY, maxX]
-        ]);
-    }
-
-    const gemeindenLayer = new L.GeoJSON.AJAX("data/gemeinden_95_geo.json", {onEachFeature: popUp});
-    const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json");
-    const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {onEachFeature: popUp});
-
-    const overlayLayers = {
-        "Vorwahlen": vorwahlLayer,
-        "Postleitzahlen": plzLayer,
-        "Gemeinden": gemeindenLayer,
-        "Bezirke": bezirkLayer,
-        "Wiener Bezirke": wienBezirkLayer
-    };
-
-    const layerControl = L.control.layers(mapLayers, overlayLayers, {sortLayers: true}).addTo(map);
-
-    function onLocationFound(e) {
-        const radius = e.accuracy / 2;
-
-        L.marker(e.latlng).addTo(map)
-            .bindPopup("You are within " + radius + " meters from this point").openPopup();
-
-        L.circle(e.latlng, radius).addTo(map);
-    }
-
-    function onLocationError(e) {
-        alert(e.message);
-    }
-
-    map.on('locationfound', onLocationFound);
-    map.on('locationerror', onLocationError);
-
-    function searchFunction(val) {
-        minX = Infinity;
-        minY = Infinity;
-        maxX = -Infinity;
-        maxY = -Infinity;
-        console.log("Split: " , val.split(/[\s,;+]+/));
-        const lowCaseVals = val.toLowerCase().split(/[\s,;+]+/);
-
-        const promises = [];
-        vorwahlLayer.eachLayer(function (layer) {
-            promises.push(new Promise(function() {
-                if ('vorwahl' in layer.feature.properties) {
-                    let show = false;
-                    let minLen = Infinity;
-                    lowCaseVals.forEach((lowCaseVal) => {
-                        if ('name' in layer.feature.properties && layer.feature.properties['name'].toLowerCase().startsWith(lowCaseVal)) {
-                            show = true;
-                        }
-                        for (const vorwahl in layer.feature.properties['vorwahl']) {
-                            if (vorwahl !== undefined && vorwahl.toString().toLowerCase().startsWith(lowCaseVal)) {
-                                console.log("Vorwahl " + vorwahl + " found...");
-                                show = true;
-                                if (lowCaseVal.length < minLen) {
-                                    minLen = lowCaseVal.length;
-                                }
-                                break;
-                            }
-                            if (
-                                layer.feature.properties['vorwahl'].hasOwnProperty(vorwahl) &&
-                                layer.feature.properties['vorwahl'][vorwahl].toString(10).toLowerCase().startsWith(lowCaseVal)
-                            ) {
-                                console.log("Vorwahl " + vorwahl + " for " + lowCaseVal + " found...");
-                                show = true;
-                                if (lowCaseVal.length < minLen) {
-                                    minLen = lowCaseVal.length;
-                                }
-                                break;
-                            }
-                        }
-                    })
-
-                    if (show) {
-                        if (minLen === 1) {
-                            layer.setStyle({
-                                'fillOpacity': 0.6,
-                                'color': layer.feature.properties['color1']
-                            });
-                        } else {
-                            layer.setStyle({
-                                'fillOpacity': 0.6,
-                                'color': layer.feature.properties['color']
-                            });
-                        }
-
-                        if (layer.feature.hasOwnProperty('featureBounds')) {
-                            if (layer.feature.featureBounds['minX'] < minX) {
-                                minX = layer.feature.featureBounds['minX'];
-                            }
-                            if (layer.feature.featureBounds['maxX'] > maxX) {
-                                maxX = layer.feature.featureBounds['maxX'];
-                            }
-                            if (layer.feature.featureBounds['minY'] < minY) {
-                                minY = layer.feature.featureBounds['minY'];
-                            }
-                            if (layer.feature.featureBounds['maxY'] > maxY) {
-                                maxY = layer.feature.featureBounds['maxY'];
-                            }
-                        }
-
-                    } else {
-                        layer.setStyle({
+        );
+        liefergebieteLayer.getAttribution = function () {
+            return 'RTR-GmbH – data.rtr.at | Liefergebiete angepasst';
+        };
+        liefergebieteLayer.addEventListener('data:loaded', function () {
+            console.log("Data loaded...");
+            document.getElementById('loader').style.display = 'none';
+            // Add legend after data is loaded
+            addLegend();
+        });
+        liefergebieteLayer.addTo(map);
+    
+        const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
+            {
+                onEachFeature: popUp,
+                style: function (feature) {
+                    if (feature.properties['plzcolor'] === undefined) {
+                        return {
                             'fillOpacity': 0,
                             'color': 'rgba(0,0,0,0)'
-                        });
+                        }
+                    } else {
+                        return {
+                            'color': feature.properties['plzcolor']
+                        }
                     }
                 }
-            }))
+            }
+        );
+        plzLayer.getAttribution = function () {
+            return 'RTR-GmbH – data.rtr.at';
+        };
+    
+        if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
+            map.fitBounds([
+                [maxY, minX],
+                [minY, maxX]
+            ]);
+        }
+        
+        const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json", {
+            onEachFeature: onEachFeature,
+            style: styleFeature
         });
-
-        plzLayer.eachLayer(function (layer) {
-            promises.push(new Promise(function () {
-                if ('plz' in layer.feature.properties) {
+        
+        const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {
+            onEachFeature: onEachFeature,
+            style: function(feature) {
+                return {
+                    'fillColor': zoneInfo.zones['A']?.color || '#3366CC', // Vienna is always in Zone A
+                    'weight': 2,
+                    'opacity': 1,
+                    'color': '#000000',
+                    'fillOpacity': 0.7
+                };
+            }
+        });
+    
+        const overlayLayers = {
+            "Liefergebiete": liefergebieteLayer,
+            "Postleitzahlen": plzLayer,
+            "Bezirke": bezirkLayer,
+            "Wiener Bezirke": wienBezirkLayer
+        };
+    
+        const layerControl = L.control.layers(mapLayers, overlayLayers, {sortLayers: true}).addTo(map);
+    
+        function onLocationFound(e) {
+            const radius = e.accuracy / 2;
+            L.marker(e.latlng).addTo(map)
+                .bindPopup("You are within " + radius + " meters from this point").openPopup();
+            L.circle(e.latlng, radius).addTo(map);
+        }
+    
+        function onLocationError(e) {
+            alert(e.message);
+        }
+    
+        map.on('locationfound', onLocationFound);
+        map.on('locationerror', onLocationError);
+    
+        window.searchFunction = function(val) {
+            minX = Infinity;
+            minY = Infinity;
+            maxX = -Infinity;
+            maxY = -Infinity;
+            console.log("Search:", val);
+            const lowCaseVals = val.toLowerCase().split(/[\s,;+]+/);
+    
+            const promises = [];
+            liefergebieteLayer.eachLayer(function (layer) {
+                promises.push(new Promise(function(resolve) {
+                    const zone = determineZone(layer.feature);
+                    const gebiet = zone ? zoneInfo.zones[zone]?.gebiet : null;
+                    
                     let show = false;
-                    lowCaseVals.forEach((lowCaseVal) => {
-                        if ('name' in layer.feature.properties && layer.feature.properties['name'].toLowerCase().startsWith(lowCaseVal)) {
+                    
+                    // Search by zone, gebiet number, or region name
+                    lowCaseVals.forEach((term) => {
+                        // Match zone letter
+                        if (zone && zone.toLowerCase() === term) {
                             show = true;
                         }
-                        for (const plz in layer.feature.properties['plz']) {
-                            if (plz !== undefined && plz.toString(10).toLowerCase().startsWith(lowCaseVal)) {
-                                console.log("PLZ " + plz + " found...");
-                                show = true;
-                                break;
+                        
+                        // Match gebiet number
+                        if (gebiet && term === gebiet.toString()) {
+                            show = true;
+                        }
+                        
+                        // Match region name
+                        if (zone && zoneInfo.zones[zone]?.name && 
+                            zoneInfo.zones[zone].name.toLowerCase().includes(term)) {
+                            show = true;
+                        }
+                        
+                        // Match gebiet name
+                        if (gebiet && zoneInfo.gebiet[gebiet]?.name &&
+                            zoneInfo.gebiet[gebiet].name.toLowerCase().includes(term)) {
+                            show = true;
+                        }
+                        
+                        // Match feature name
+                        if (layer.feature.properties.name && 
+                            layer.feature.properties.name.toLowerCase().includes(term)) {
+                            show = true;
+                        }
+                        
+                        // Match postal code or area code
+                        if (layer.feature.properties.vorwahl) {
+                            for (const vorwahl in layer.feature.properties.vorwahl) {
+                                if (vorwahl.toString().toLowerCase().includes(term)) {
+                                    show = true;
+                                    break;
+                                }
                             }
-                            if (
-                                layer.feature.properties['plz'].hasOwnProperty(plz) &&
-                                layer.feature.properties['plz'][plz].toString(10).toLowerCase().startsWith(lowCaseVal)
-                            ) {
-                                console.log("PLZ " + plz + " for " + lowCaseVal + " found...");
-                                show = true;
-                                break;
+                        }
+                        
+                        if (layer.feature.properties.plz) {
+                            for (const plz in layer.feature.properties.plz) {
+                                if (plz.toString().toLowerCase().includes(term)) {
+                                    show = true;
+                                    break;
+                                }
                             }
                         }
                     });
-
+    
                     if (show) {
+                        // Highlight feature
+                        const gebietNumber = gebiet ? gebiet : 0;
+                        const color = gebietNumber && zoneInfo.gebiet[gebietNumber] ? zoneInfo.gebiet[gebietNumber].color : '#CCCCCC';
+                        
                         layer.setStyle({
-                            'fillOpacity': 0.6,
-                            'color': layer.feature.properties['plzcolor']
+                            'fillColor': color,
+                            'fillOpacity': 0.8,
+                            'weight': 3,
+                            'color': '#000'
                         });
-
+    
+                        // Update bounds
                         if (layer.feature.hasOwnProperty('featureBounds')) {
-                            if (layer.feature.featureBounds['minX'] < minX) {
-                                minX = layer.feature.featureBounds['minX'];
-                            }
-                            if (layer.feature.featureBounds['maxX'] > maxX) {
-                                maxX = layer.feature.featureBounds['maxX'];
-                            }
-                            if (layer.feature.featureBounds['minY'] < minY) {
-                                minY = layer.feature.featureBounds['minY'];
-                            }
-                            if (layer.feature.featureBounds['maxY'] > maxY) {
-                                maxY = layer.feature.featureBounds['maxY'];
-                            }
+                            if (layer.feature.featureBounds['minX'] < minX) minX = layer.feature.featureBounds['minX'];
+                            if (layer.feature.featureBounds['maxX'] > maxX) maxX = layer.feature.featureBounds['maxX'];
+                            if (layer.feature.featureBounds['minY'] < minY) minY = layer.feature.featureBounds['minY'];
+                            if (layer.feature.featureBounds['maxY'] > maxY) maxY = layer.feature.featureBounds['maxY'];
                         }
                     } else {
+                        // Dim unmatched features
                         layer.setStyle({
-                            'fillOpacity': 0,
-                            'color': 'rgba(0,0,0,0)'
+                            'fillOpacity': 0.2,
+                            'weight': 0.5,
+                            'color': '#999'
                         });
                     }
-                }
-            }));
+                    resolve();
+                }));
+            });
+    
+            // Wait for all promises to complete, then fit bounds if necessary
+            Promise.all(promises)
+                .then(() => {
+                    if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
+                        map.fitBounds([
+                            [maxY, minX],
+                            [minY, maxX]
+                        ]);
+                    }
+                })
+                .catch(error => console.log(`Error in executing ${error}`));
+        };
+    
+        // Create search box
+        L.Control.textbox = L.Control.extend({
+            onAdd: function () {
+                const text = L.DomUtil.create('div', 'info');
+                text.id = 'searchDiv';
+                text.innerHTML = '<input id="searchInput" placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
+                return text;
+            },
+            onRemove: function (map) {}
         });
-
-        setTimeout(function() {
-            console.log("promises.len: " + promises.length)
-            if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-                map.fitBounds([
-                    [maxY, minX],
-                    [minY, maxX]
-                ]);
-            }
-        }, 500)
-
-        Promise.all(promises)
-            .then((response) => {
-                console.log("promises: " + minX + "/" + minY + " - " + maxX + "/" + maxY);
-                console.log(response)
-                if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-                    map.fitBounds([
-                        [maxY, minX],
-                        [minY, maxX]
-                    ]);
-                }
-            })
-            .catch(error => console.log(`Error in executing ${error}`)); // Promise.all throws an error.
+    
+        const textbox = function (opts) {
+            return new L.Control.textbox(opts);
+        };
+        textbox({position: 'topleft'}).addTo(map);
     }
 
-    L.Control.textbox = L.Control.extend({
-        onAdd: function () {
-            const text = L.DomUtil.create('div');
-            text.id = 'searchDiv';
-            text.innerHTML = '<input id="searchInput" size=10 onkeyup="searchFunction(this.value)"/>';
-            return text;
-        },
-
-        onRemove: function (map) {
-        }
-    });
-
-    const textbox = function (opts) {
-        return new L.Control.textbox(opts);
-    };
-    textbox({position: 'topleft'}).addTo(map);
-
-    // Initialize the zone data when the page loads
-    document.addEventListener('DOMContentLoaded', function() {
-      // Load zone data
-      loadZoneData().then(success => {
-        if (success) {
-          console.log("Zone data loaded successfully. You can now use zone and gebiet visualizations.");
-        } else {
-          console.error("Failed to load zone data. Zone and gebiet visualizations won't be available.");
-        }
-      });
-    });
-
-    // Function to change visualization mode
-    function changeVisualizationMode() {
-      const mode = document.getElementById('vizMode').value;
-      
-      // Hide all layers
-      if (vorwahlLayer && map.hasLayer(vorwahlLayer)) {
-        map.removeLayer(vorwahlLayer);
-      }
-      
-      if (plzLayer && map.hasLayer(plzLayer)) {
-        map.removeLayer(plzLayer);
-      }
-      
-      if (zoneLayer && map.hasLayer(zoneLayer)) {
-        map.removeLayer(zoneLayer);
-      }
-      
-      if (gebietLayer && map.hasLayer(gebietLayer)) {
-        map.removeLayer(gebietLayer);
-      }
-      
-      // Show the selected layer
-      if (mode === 'vorwahl') {
-        vorwahlLayer.addTo(map);
-      } else if (mode === 'plz') {
-        plzLayer.addTo(map);
-      } else if (mode === 'zone') {
-        // Show the zone layer
-        if (!zoneLayer) {
-          zoneLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-            onEachFeature: function(feature, layer) {
-              const popupContent = createPopupContent(feature);
-              if (popupContent) {
-                layer.bindPopup(popupContent);
-              }
-            },
-            style: getZoneStyle
-          });
-        }
-        zoneLayer.addTo(map);
-        createZoneLegend();
-      } else if (mode === 'gebiet') {
-        // Show the gebiet layer
-        if (!gebietLayer) {
-          gebietLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-            onEachFeature: function(feature, layer) {
-              const popupContent = createPopupContent(feature);
-              if (popupContent) {
-                layer.bindPopup(popupContent);
-              }
-            },
-            style: getGebietStyle
-          });
-        }
-        gebietLayer.addTo(map);
-        createGebietLegend();
-      }
-    }
+    // Start loading data
+    loadMappingData();
 </script>
+
 </body>
 </html>
