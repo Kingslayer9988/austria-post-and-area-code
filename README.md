@@ -1,28 +1,13 @@
-# austria-post-and-aera-code
-A map with all postal and aera codes to search within visible at https://www.kolmann.at/austria-post-and-aera-code/
+Work in Progress: (Vektor-gezeichnete(Infinite Resoultion) Interactive Karte mit PLZ zuordnung Austria)
+![Screenshot 2025-03-14 142851](https://github.com/user-attachments/assets/6a092336-856e-4573-8adf-c8dbf6d4933a)
 
-
-Based on:
-* https://github.com/ginseng666/GeoJSON-TopoJSON-Austria
-* https://data.rtr.at/api/v1/tables/
-
-* Ortsnetze:
-  * https://www.rtr.at/de/inf/odRNOrtsnetze
-  * https://data.rtr.at/api/v1/tables/rnOrtsnetze.json?size=0
-
-* PLZ:
-  * https://www.rtr.at/de/inf/odplz
-  * https://data.rtr.at/api/v1/tables/plz.json?size=0
-
-
-Die RTR-GmbH ersucht Dienstleister, die OGD der RTR-GmbH für ihre Anwendungen und Services verwenden, aktiv darüber zu informieren, wo diese Services und Anwendungen aufzufinden sind. Bitte erfassen Sie die Anwendung bzw. das Service unter data.gv.at/anwendung-einreichen/.
-
-https://www.rtr.at/de/inf/nutzungsbedingungen
-
-
-PLZ und Gemeindekennziffer:
-
-https://www.statistik.at/web_de/klassifikationen/regionale_gliederungen/gemeinden/index.html
-
-
-
+>[Note]
+>Inspired by Helmuth \
+>Maybe the key to solve the unsolveable question "How to make someone use helper that neither needs or wants it) \
+>If you have a .pdf File with 500 pages and you read for all "PLZ" in all sheets \
+>You add Print Queue for him to know ith PLZ comes when from the printer :D \
+>sort & group and sort them => into Cargo-Zones and PLZ "99_A_3264_9999" "$PRINTQ_$ZONE_$PLZ_$ANZAHL" \
+>You draw big juicy dots on this JS based Browser-Map => Super fast (Instant dots almost 0 loading) \
+>
+> 
+>
