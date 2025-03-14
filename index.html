@@ -17,7 +17,25 @@
             height: 100%;
             margin: 0;
             padding: 0;
-        }
+        // Create an improved search box
+    L.Control.textbox = L.Control.extend({
+        onAdd: function () {
+            const text = L.DomUtil.create('div', 'info');
+            text.id = 'searchDiv';
+            text.innerHTML = '<input id="searchInput" placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
+            return text;
+        },
+        onRemove: function (map) {}
+    });
+
+    const textbox = function (opts) {
+        return new L.Control.textbox(opts);
+    };
+    textbox({position: 'topleft'}).addTo(map);
+</script>
+
+</body>
+</html>
 
         #map {
             width: 100vw;
@@ -204,7 +222,8 @@
                 plzToZoneMap[plz] = 'C';
             });
             
-            ['7500', '8000', '8200', '8230', '8600', '8700'].forEach(plz => {
+            // FIX: Properly assign Zone E postal codes
+            ['7500', '8000', '8200', '8230', '8600', '8700', '5000', '5020', '5100', '5300', '5400'].forEach(plz => {
                 plzToZoneMap[plz] = 'E';
             });
             
@@ -213,12 +232,12 @@
                 plzToZoneMap[plz] = 'D';
             });
             
-            ['4800', '4820', '4840', '4850', '4870', '4950', '5000'].forEach(plz => {
+            ['4800', '4820', '4840', '4850', '4870', '4950'].forEach(plz => {
                 plzToZoneMap[plz] = 'H';
             });
             
             // Zone F -> Gebiet 3
-            ['8010', '8020', '8030', '8040', '8101', '8200', '8301', '8330', '8401', '8430'].forEach(plz => {
+            ['8010', '8020', '8030', '8040', '8101', '8301', '8330', '8401', '8430', '8510', '8570', '8940', '8970'].forEach(plz => {
                 plzToZoneMap[plz] = 'F';
             });
             
@@ -292,9 +311,28 @@
                 switch (firstDigit) {
                     case '1': case '2': case '3': case '7': return 'A'; // Wien + surrounding
                     case '4': return 'D'; // Oberösterreich
-                    case '5': return 'H'; // Salzburg
-                    case '6': return 'I'; // Tirol/Vorarlberg
-                    case '8': return 'F'; // Steiermark
+                    case '5': return 'E'; // FIX: Use Zone E for Salzburg (5xxx) instead of H
+                    case '6': 
+                        if (plz.startsWith('69') || plz.startsWith('68') || plz.startsWith('67') || plz.startsWith('66')) {
+                            return 'J'; // Vorarlberg
+                        }
+                        return 'I'; // Tirol
+                    case '8': 
+                        if (plz.startsWith('8010') || plz.startsWith('802') || plz.startsWith('803') || 
+                            plz.startsWith('804') || plz.startsWith('85') || plz.startsWith('86')) {
+                            return 'F'; // Steiermark
+                        }
+                        if (plz.startsWith('87') || plz.startsWith('88')) {
+                            return 'G'; // Kärnten
+                        }
+                        // For mixed areas check more details
+                        if (feature.properties.name) {
+                            const name = feature.properties.name.toLowerCase();
+                            if (name.includes('steiermark') || name.includes('graz')) {
+                                return 'F';
+                            }
+                        }
+                        return 'F'; // Default to Steiermark for 8xxx
                     case '9': return 'G'; // Kärnten
                 }
             }
@@ -306,9 +344,9 @@
             if (name.includes('wien') || name.includes('vienna')) return 'A';
             if (name.includes('niederöst') && !name.includes('süd')) return 'B';
             if (name.includes('niederöst') && name.includes('süd')) return 'E';
+            if (name.includes('salzburg')) return 'E'; // FIX: Salzburg is Zone E
             if (name.includes('oberöst') && name.includes('süd')) return 'D';
             if (name.includes('oberöst') && name.includes('nord')) return 'H';
-            if (name.includes('salzburg')) return 'H';
             if (name.includes('steiermark') || name.includes('styria') || name.includes('graz')) return 'F';
             if (name.includes('kärnten') || name.includes('carinthia') || name.includes('klagenfurt')) return 'G';
             if (name.includes('tirol') || name.includes('innsbruck')) return 'I';
@@ -328,7 +366,7 @@
                 case '2': return 'G'; // Kärnten
                 case '3': return 'B'; // Niederösterreich (default to B)
                 case '4': return 'D'; // Oberösterreich Süd
-                case '5': return 'H'; // Salzburg
+                case '5': return 'E'; // FIX: Salzburg is Zone E
                 case '6': return 'F'; // Steiermark
                 case '7': return 'I'; // Tirol
                 case '8': return 'J'; // Vorarlberg
@@ -356,7 +394,7 @@
                 if (lng > 15.5 && lat > 48.0) return 'B'; // NÖ northeast
                 if (lng < 15.5 && lat > 48.0) return 'C'; // NÖ northwest
                 if (lng < 14.0 && lat < 48.0 && lat > 47.0) return 'D'; // OÖ south
-                if (lng > 15.0 && lat < 48.0 && lat > 47.0) return 'E'; // NÖ south
+                if (lng > 15.0 && lat < 48.0 && lat > 47.0) return 'E'; // NÖ south and Salzburg
                 if (lng > 14.5 && lat < 47.5) return 'F'; // Steiermark
                 if (lng > 13.5 && lng < 14.5 && lat < 47.0) return 'G'; // Kärnten
                 if (lng < 14.0 && lat > 48.0) return 'H'; // OÖ north
@@ -571,10 +609,7 @@
         ]);
     }
 
-    const gemeindenLayer = new L.GeoJSON.AJAX("data/gemeinden_95_geo.json", {
-        onEachFeature: onEachFeature,
-        style: styleFeature
-    });
+    // Remove Gemeinden layer as requested
     
     const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json", {
         onEachFeature: onEachFeature,
@@ -597,7 +632,6 @@
     const overlayLayers = {
         "Liefergebiete": vorwahlLayer,
         "Postleitzahlen": plzLayer,
-        "Gemeinden": gemeindenLayer,
         "Bezirke": bezirkLayer,
         "Wiener Bezirke": wienBezirkLayer
     };
@@ -702,47 +736,3 @@
                         'color': '#999'
                     });
                 }
-            }));
-        });
-
-        // Wait for all promises to complete, then fit bounds if necessary
-        setTimeout(function() {
-            if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-                map.fitBounds([
-                    [maxY, minX],
-                    [minY, maxX]
-                ]);
-            }
-        }, 500);
-
-        Promise.all(promises)
-            .then(() => {
-                if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-                    map.fitBounds([
-                        [maxY, minX],
-                        [minY, maxX]
-                    ]);
-                }
-            })
-            .catch(error => console.log(`Error in executing ${error}`));
-    }
-
-    // Create an improved search box
-    L.Control.textbox = L.Control.extend({
-        onAdd: function () {
-            const text = L.DomUtil.create('div', 'info');
-            text.id = 'searchDiv';
-            text.innerHTML = '<input id="searchInput" placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
-            return text;
-        },
-        onRemove: function (map) {}
-    });
-
-    const textbox = function (opts) {
-        return new L.Control.textbox(opts);
-    };
-    textbox({position: 'topleft'}).addTo(map);
-</script>
-
-</body>
-</html>
