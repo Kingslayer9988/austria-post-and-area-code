@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="de-AT">
 <head>
-    <title>Liefergebietszuordnung für NOS-Dispatcher</title>
+    <title>Liefergebietszuordnung für Dispatcher</title>
 
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,7 +17,6 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
         }
 
         #map {
@@ -27,8 +26,8 @@
         }
 
         .loader {
-            border: 16px solid #f3f3f3;
-            border-top: 16px solid #3498db;
+            border: 16px solid #f3f3f3; /* Light grey */
+            border-top: 16px solid #3498db; /* Blue */
             border-radius: 50%;
             width: 120px;
             height: 120px;
@@ -38,33 +37,42 @@
             top: calc(50% - 60px);
             left: calc(50% - 60px);
         }
-        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
 
         .info {
-            padding: 6px 8px;
+            padding: 8px;
             font: 14px/16px Arial, Helvetica, sans-serif;
             background: white;
-            background: rgba(255,255,255,0.8);
+            background: rgba(255,255,255,0.9);
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
             border-radius: 5px;
         }
         
         .legend {
             text-align: left;
-            line-height: 18px;
+            line-height: 24px;
             color: #555;
         }
         
         .legend i {
-            width: 18px;
-            height: 18px;
+            width: 20px;
+            height: 20px;
             float: left;
             margin-right: 8px;
-            opacity: 0.7;
+            opacity: 0.85;
+            border: 1px solid #333;
+        }
+        
+        #searchInput {
+            padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 200px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+            font-size: 14px;
         }
     </style>
 </head>
@@ -73,38 +81,96 @@
 <div id='map'></div>
 
 <script>
+    // Delivery zone mapping - will be loaded from external JSON file
+    let plzToZoneMap = {};
+    let zoneInfo = {
+        zones: {
+            "A": { gebiet: 1, color: "#3366CC", name: "Wien und Umgebung" },
+            "B": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordost)" },
+            "C": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Nordwest)" },
+            "E": { gebiet: 1, color: "#3366CC", name: "Niederösterreich (Süd), Teile von Salzburg" },
+            "D": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Süd)" },
+            "H": { gebiet: 2, color: "#DC3912", name: "Oberösterreich (Nord)" },
+            "F": { gebiet: 3, color: "#FF9900", name: "Steiermark" },
+            "G": { gebiet: 4, color: "#109618", name: "Kärnten" },
+            "I": { gebiet: 5, color: "#990099", name: "Tirol" },
+            "J": { gebiet: 6, color: "#0099C6", name: "Vorarlberg" }
+        },
+        gebiet: {
+            "1": { name: "NOS-Ausliefergebiet 1 (Zonen A, B, C, E)", color: "#3366CC" },
+            "2": { name: "NOS-Ausliefergebiet 2 (Zonen D, H)", color: "#DC3912" },
+            "3": { name: "NOS-Ausliefergebiet 3 (Zone F)", color: "#FF9900" },
+            "4": { name: "NOS-Ausliefergebiet 4 (Zone G)", color: "#109618" },
+            "5": { name: "NOS-Ausliefergebiet 5 (Zone I)", color: "#990099" },
+            "6": { name: "NOS-Ausliefergebiet 6 (Zone J)", color: "#0099C6" }
+        }
+    };
+
+    // Initialize the PLZ to Zone mapping from a hardcoded default
+    // This will be overridden if we can load the external JSON file
+    function initializeDefaultMapping() {
+        // Basic postal codes for each zone - will be replaced with the complete list from JSON
+        plzToZoneMap = {
+            "1000": "A", "1010": "A", "1020": "A", "1030": "A", "1040": "A", 
+            "1050": "A", "1060": "A", "1070": "A", "1080": "A", "1090": "A", 
+            "1100": "A", "1110": "A", "1120": "A", "1130": "A", "1140": "A",
+            
+            "2400": "B", "2600": "B", "2800": "B", "3100": "B", "3200": "B",
+            
+            "3250": "C", "3500": "C", "3600": "C", "3800": "C", "3900": "C",
+            
+            "4000": "D", "4020": "D", "4030": "D", "4040": "D", "4050": "D",
+            
+            "7500": "E", "8000": "E", "8200": "E", "5000": "E", "5020": "E",
+            
+            "4800": "H", "4820": "H", "4840": "H", "4850": "H", "4870": "H",
+            
+            "8010": "F", "8020": "F", "8030": "F", "8040": "F", "8101": "F",
+            
+            "8750": "G", "8800": "G", "9000": "G", "9020": "G", "9100": "G",
+            
+            "6000": "I", "6020": "I", "6060": "I", "6100": "I", "6130": "I",
+            
+            "6600": "J", "6700": "J", "6800": "J", "6830": "J", "6850": "J"
+        };
+    }
+
+    // Initialize with default mapping
+    initializeDefaultMapping();
+
+    // Function to load external mapping
+    function loadMappingData() {
+        // Try to load plzToZone.json
+        fetch('data/plzToZone.json')
+            .then(response => response.json())
+            .then(data => {
+                plzToZoneMap = data;
+                console.log("PLZ to Zone mapping loaded from file");
+            })
+            .catch(error => {
+                console.warn("Could not load PLZ to Zone mapping, using defaults", error);
+            });
+
+        // Try to load zoneInfo.json
+        fetch('data/zoneInfo.json')
+            .then(response => response.json())
+            .then(data => {
+                zoneInfo = data;
+                console.log("Zone info loaded from file");
+            })
+            .catch(error => {
+                console.warn("Could not load Zone info, using defaults", error);
+            });
+    }
+
+    // Try to load the external data
+    loadMappingData();
+
+    // Map setup
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-
-    // Define the delivery zones
-    const deliveryZones = {
-        'Gebiet 1': {
-            color: '#87CEFA',  // Light blue
-            description: 'Gebiet 1 (A, B, C, E)'
-        },
-        'Gebiet 2': {
-            color: '#E6CCF2',  // Light purple/pink
-            description: 'Gebiet 2 (H, D)'
-        },
-        'Gebiet 3': {
-            color: '#9370DB',  // Darker purple
-            description: 'Gebiet 3 (F)'
-        },
-        'Gebiet 4': {
-            color: '#FFFF99',  // Yellow
-            description: 'Gebiet 4 (G)'
-        },
-        'Gebiet 5': {
-            color: '#FFA07A',  // Red/orange
-            description: 'Gebiet 5 (I)'
-        },
-        'Gebiet 6': {
-            color: '#90EE90',  // Light green
-            description: 'Gebiet 6 (J)'
-        }
-    };
 
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png', {
         maxZoom: 18,
@@ -144,17 +210,115 @@
 
     const hash = new L.Hash(map);
 
+    // Function to determine the zone based on postal code or region
+    function determineZone(feature) {
+        if (!feature || !feature.properties) return null;
+        
+        // Check for postal code (plz) in our mapping
+        if (feature.properties.plz) {
+            // Handle if plz is an object or a string
+            let plzList = [];
+            if (typeof feature.properties.plz === 'object') {
+                plzList = Object.keys(feature.properties.plz);
+            } else {
+                plzList = [feature.properties.plz.toString()];
+            }
+            
+            // Check each postal code
+            for (const plz of plzList) {
+                // Try exact match first
+                if (plzToZoneMap[plz]) {
+                    return plzToZoneMap[plz];
+                }
+                
+                // Try 3-digit prefix match
+                const plzPrefix = plz.substring(0, 3);
+                for (const mappedPlz in plzToZoneMap) {
+                    if (mappedPlz.startsWith(plzPrefix)) {
+                        return plzToZoneMap[mappedPlz];
+                    }
+                }
+                
+                // Try 1-digit match (just first digit - rough area)
+                const firstDigit = plz.charAt(0);
+                switch (firstDigit) {
+                    case '1': case '2': case '3': case '7': return 'A'; // Wien + surrounding
+                    case '4': return 'D'; // Oberösterreich
+                    case '5': return 'E'; // Salzburg
+                    case '6': 
+                        if (plz.startsWith('69') || plz.startsWith('68') || plz.startsWith('67') || plz.startsWith('66')) {
+                            return 'J'; // Vorarlberg
+                        }
+                        return 'I'; // Tirol
+                    case '8': 
+                        if (plz.startsWith('87') || plz.startsWith('88')) {
+                            return 'G'; // Kärnten
+                        }
+                        return 'F'; // Steiermark
+                    case '9': return 'G'; // Kärnten
+                }
+            }
+        }
+        
+        // Try to extract from name if available
+        if (feature.properties.name) {
+            const name = feature.properties.name.toLowerCase();
+            if (name.includes('wien') || name.includes('vienna')) return 'A';
+            if (name.includes('niederöst') && !name.includes('süd')) return 'B';
+            if (name.includes('niederöst') && name.includes('süd')) return 'E';
+            if (name.includes('salzburg')) return 'E';
+            if (name.includes('oberöst') && name.includes('süd')) return 'D';
+            if (name.includes('oberöst') && name.includes('nord')) return 'H';
+            if (name.includes('steiermark') || name.includes('styria') || name.includes('graz')) return 'F';
+            if (name.includes('kärnten') || name.includes('carinthia') || name.includes('klagenfurt')) return 'G';
+            if (name.includes('tirol') || name.includes('innsbruck')) return 'I';
+            if (name.includes('vorarlberg') || name.includes('dornbirn') || name.includes('bregenz')) return 'J';
+        }
+        
+        return null;
+    }
+    
+    // Cache for zone determinations to improve performance
+    const zoneCache = new Map();
+    
+    // Get the color for a feature
+    function getFeatureColor(feature) {
+        // Check cache first
+        const featureId = feature.id || JSON.stringify(feature.properties);
+        if (zoneCache.has(featureId)) {
+            const cachedZone = zoneCache.get(featureId);
+            return zoneInfo.zones[cachedZone]?.color || '#CCCCCC';
+        }
+        
+        // Determine zone
+        const zone = determineZone(feature);
+        
+        // Cache the result
+        if (zone) {
+            zoneCache.set(featureId, zone);
+        }
+        
+        if (zone && zoneInfo.zones[zone]) {
+            return zoneInfo.zones[zone].color;
+        }
+        return '#CCCCCC'; // Default gray for unknown zones
+    }
+
     function popUp(feature, layer) {
         const out = [];
         if (feature.hasOwnProperty('properties')) {
-            // Determine which delivery area this feature belongs to based on coordinates
-            // This is a simplified approach - you'll need to adjust based on your actual map regions
-            const gebiet = determineGebietByLocation(feature);
-            if (gebiet) {
-                out.push("<b>Liefergebiet:</b> " + gebiet);
+            // Add delivery zone info
+            const zone = determineZone(feature);
+            if (zone) {
+                const gebiet = zoneInfo.zones[zone]?.gebiet;
+                out.push("<b>Zone:</b> " + zone);
+                out.push("<b>Liefergebiet:</b> " + zoneInfo.gebiet[gebiet].name);
+                out.push("<b>Region:</b> " + zoneInfo.zones[zone].name);
             }
             
+            // Add other feature properties
             for (const key in feature.properties) {
+                // Skip certain technical properties
                 if (key === 'color' || key === 'color1' || key === 'plzcolor' || key === 'plzcolor1') continue;
                 
                 if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
@@ -209,66 +373,8 @@
             }
         }
     }
-
-    // Function to determine which gebiet a feature belongs to based on location or properties
-    function determineGebietByLocation(feature) {
-        // This is where you would implement your logic to determine the delivery area
-        // For now, this is a placeholder - you'll need to adjust based on your specific requirements
-        
-        // Example approach: use bounding boxes for each region
-        if (!feature.geometry || !feature.geometry.coordinates) return null;
-        
-        // Get center point of feature (simplified)
-        let center;
-        if (feature.geometry.type === 'Polygon' || feature.geometry.type === 'MultiPolygon') {
-            const bounds = L.geoJSON(feature).getBounds();
-            center = bounds.getCenter();
-        } else {
-            return null;
-        }
-        
-        // Simple zone determination based on lat/lng
-        // These are rough approximations - you'll need to adjust based on your actual zones
-        
-        // Eastern Austria (Vienna, Lower Austria east, northern Burgenland)
-        if (center.lng > 15.5 && center.lat > 47.5) {
-            return 'Gebiet 1'; // A, B, C, E
-        }
-        
-        // Central North (Upper Austria, parts of Lower Austria)
-        if (center.lng < 15.5 && center.lng > 13.0 && center.lat > 48.0) {
-            return 'Gebiet 2'; // H, D
-        }
-        
-        // Southeastern (Styria, southern Burgenland)
-        if (center.lng > 14.5 && center.lat < 47.5 && center.lat > 46.5) {
-            return 'Gebiet 3'; // F
-        }
-        
-        // Southern (Carinthia)
-        if (center.lat < 47.0 && center.lng > 13.0 && center.lng < 15.0) {
-            return 'Gebiet 4'; // G
-        }
-        
-        // Western (Tyrol)
-        if (center.lng < 13.0 && center.lng > 10.5) {
-            return 'Gebiet 5'; // I
-        }
-        
-        // Westernmost (Vorarlberg)
-        if (center.lng < 10.5) {
-            return 'Gebiet 6'; // J
-        }
-        
-        return null;
-    }
-
-    // Function to get color based on gebiet
-    function getColorForGebiet(gebiet) {
-        return deliveryZones[gebiet]?.color || '#CCCCCC';
-    }
-
-    // Add legend
+    
+    // Add a legend to the map
     function addLegend() {
         const legend = L.control({position: 'bottomright'});
         
@@ -276,10 +382,11 @@
             const div = L.DomUtil.create('div', 'info legend');
             let labels = ['<strong>Liefergebiete</strong>'];
             
-            for(const gebiet in deliveryZones) {
+            // Add legend items for each gebiet
+            for(const [gebietNum, info] of Object.entries(zoneInfo.gebiet)) {
                 labels.push(
-                    '<i style="background:' + deliveryZones[gebiet].color + '"></i> ' +
-                    deliveryZones[gebiet].description
+                    '<i style="background:' + info.color + '"></i> ' +
+                    info.name
                 );
             }
             
@@ -290,57 +397,82 @@
         legend.addTo(map);
     }
 
-    // Create delivery zone layer
-    const vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: popUp,
-        style: function(feature) {
-            const gebiet = determineGebietByLocation(feature);
-            if (gebiet) {
-                return {
-                    'fillOpacity': 0.6,
-                    'weight': 1,
-                    'color': '#333',
-                    'fillColor': getColorForGebiet(gebiet)
-                };
-            } else {
-                return {
-                    'fillOpacity': 0,
-                    'color': 'rgba(0,0,0,0)'
-                };
-            }
-        }
-    });
+    // Common style function for all layers
+    function styleFeature(feature) {
+        return {
+            'fillColor': getFeatureColor(feature),
+            'weight': 2,
+            'opacity': 1,
+            'color': '#000000',
+            'fillOpacity': 0.7,
+            'dashArray': ''
+        };
+    }
     
-    vorwahlLayer.getAttribution = function() {
+    // Highlight feature on mouseover
+    function highlightFeature(e) {
+        const layer = e.target;
+        layer.setStyle({
+            'weight': 3,
+            'color': '#FFFFFF',
+            'dashArray': '',
+            'fillOpacity': 0.8
+        });
+        layer.bringToFront();
+    }
+    
+    // Reset highlight on mouseout
+    function resetHighlight(e) {
+        const layer = e.target;
+        layer.setStyle(styleFeature(layer.feature));
+    }
+    
+    // Set up interactions for each feature
+    function onEachFeature(feature, layer) {
+        popUp(feature, layer);
+        layer.on({
+            mouseover: highlightFeature,
+            mouseout: resetHighlight
+        });
+    }
+
+    // Main layer showing delivery zones
+    const liefergebieteLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
+        {
+            onEachFeature: onEachFeature,
+            style: styleFeature
+        }
+    );
+    liefergebieteLayer.getAttribution = function () {
         return 'RTR-GmbH – data.rtr.at | Liefergebiete angepasst';
     };
-    
-    vorwahlLayer.addEventListener('data:loaded', function() {
+    liefergebieteLayer.addEventListener('data:loaded', function () {
         console.log("Data loaded...");
         document.getElementById('loader').style.display = 'none';
         // Add legend after data is loaded
         addLegend();
     });
-    
-    vorwahlLayer.addTo(map);
+    liefergebieteLayer.addTo(map);
 
-    const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: popUp,
-        style: function(feature) {
-            if (feature.properties['plzcolor'] === undefined) {
-                return {
-                    'fillOpacity': 0,
-                    'color': 'rgba(0,0,0,0)'
-                };
-            } else {
-                return {
-                    'color': feature.properties['plzcolor']
-                };
+    // Original PLZ layer (can be useful for comparison)
+    const plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
+        {
+            onEachFeature: popUp,
+            style: function (feature) {
+                if (feature.properties['plzcolor'] === undefined) {
+                    return {
+                        'fillOpacity': 0,
+                        'color': 'rgba(0,0,0,0)'
+                    }
+                } else {
+                    return {
+                        'color': feature.properties['plzcolor']
+                    }
+                }
             }
         }
-    });
-    
-    plzLayer.getAttribution = function() {
+    );
+    plzLayer.getAttribution = function () {
         return 'RTR-GmbH – data.rtr.at';
     };
 
@@ -351,14 +483,28 @@
         ]);
     }
 
-    const gemeindenLayer = new L.GeoJSON.AJAX("data/gemeinden_95_geo.json", {onEachFeature: popUp});
-    const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json");
-    const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {onEachFeature: popUp});
+    // Other layer options
+    const bezirkLayer = new L.GeoJSON.AJAX("data/bezirke_995_geo.json", {
+        onEachFeature: onEachFeature,
+        style: styleFeature
+    });
+    
+    const wienBezirkLayer = new L.GeoJSON.AJAX("data/BezirksgrenzenWien.json", {
+        onEachFeature: onEachFeature,
+        style: function(feature) {
+            return {
+                'fillColor': zoneInfo.zones['A'].color, // Vienna is always in Zone A
+                'weight': 2,
+                'opacity': 1,
+                'color': '#000000',
+                'fillOpacity': 0.7
+            };
+        }
+    });
 
     const overlayLayers = {
-        "Liefergebiete": vorwahlLayer,
+        "Liefergebiete": liefergebieteLayer,
         "Postleitzahlen": plzLayer,
-        "Gemeinden": gemeindenLayer,
         "Bezirke": bezirkLayer,
         "Wiener Bezirke": wienBezirkLayer
     };
@@ -380,21 +526,126 @@
     map.on('locationerror', onLocationError);
 
     function searchFunction(val) {
-        // Original search function implementation
-        // ...
+        minX = Infinity;
+        minY = Infinity;
+        maxX = -Infinity;
+        maxY = -Infinity;
+        console.log("Search:", val);
+        const lowCaseVals = val.toLowerCase().split(/[\s,;+]+/);
+
+        const promises = [];
+        liefergebieteLayer.eachLayer(function (layer) {
+            promises.push(new Promise(function() {
+                const zone = determineZone(layer.feature);
+                const gebiet = zone ? zoneInfo.zones[zone]?.gebiet : null;
+                
+                let show = false;
+                
+                // Search by zone, gebiet number, or region name
+                lowCaseVals.forEach((term) => {
+                    // Match zone letter
+                    if (zone && zone.toLowerCase() === term) {
+                        show = true;
+                    }
+                    
+                    // Match gebiet number
+                    if (gebiet && term === gebiet.toString()) {
+                        show = true;
+                    }
+                    
+                    // Match region name
+                    if (zone && zoneInfo.zones[zone].name && 
+                        zoneInfo.zones[zone].name.toLowerCase().includes(term)) {
+                        show = true;
+                    }
+                    
+                    // Match feature name
+                    if (layer.feature.properties.name && 
+                        layer.feature.properties.name.toLowerCase().includes(term)) {
+                        show = true;
+                    }
+                    
+                    // Match postal code or area code
+                    if (layer.feature.properties.vorwahl) {
+                        for (const vorwahl in layer.feature.properties.vorwahl) {
+                            if (vorwahl.toString().toLowerCase().includes(term)) {
+                                show = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (layer.feature.properties.plz) {
+                        for (const plz in layer.feature.properties.plz) {
+                            if (plz.toString().toLowerCase().includes(term)) {
+                                show = true;
+                                break;
+                            }
+                        }
+                    }
+                });
+
+                if (show) {
+                    // Highlight feature
+                    layer.setStyle({
+                        'fillColor': zone ? zoneInfo.zones[zone].color : '#CCCCCC',
+                        'fillOpacity': 0.8,
+                        'weight': 3,
+                        'color': '#000'
+                    });
+
+                    // Update bounds
+                    if (layer.feature.hasOwnProperty('featureBounds')) {
+                        if (layer.feature.featureBounds['minX'] < minX) minX = layer.feature.featureBounds['minX'];
+                        if (layer.feature.featureBounds['maxX'] > maxX) maxX = layer.feature.featureBounds['maxX'];
+                        if (layer.feature.featureBounds['minY'] < minY) minY = layer.feature.featureBounds['minY'];
+                        if (layer.feature.featureBounds['maxY'] > maxY) maxY = layer.feature.featureBounds['maxY'];
+                    }
+                } else {
+                    // Dim unmatched features
+                    layer.setStyle({
+                        'fillOpacity': 0.2,
+                        'weight': 0.5,
+                        'color': '#999'
+                    });
+                }
+            }));
+        });
+
+        // Wait for all promises to complete, then fit bounds if necessary
+        setTimeout(function() {
+            if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
+                map.fitBounds([
+                    [maxY, minX],
+                    [minY, maxX]
+                ]);
+            }
+        }, 500);
+
+        Promise.all(promises)
+            .then(() => {
+                if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
+                    map.fitBounds([
+                        [maxY, minX],
+                        [minY, maxX]
+                    ]);
+                }
+            })
+            .catch(error => console.log(`Error in executing ${error}`));
     }
 
+    // Create an improved search box
     L.Control.textbox = L.Control.extend({
-        onAdd: function() {
-            const text = L.DomUtil.create('div');
+        onAdd: function () {
+            const text = L.DomUtil.create('div', 'info');
             text.id = 'searchDiv';
-            text.innerHTML = '<input id="searchInput" size=10 placeholder="Suche..." onkeyup="searchFunction(this.value)"/>';
+            text.innerHTML = '<input id="searchInput" placeholder="Suche nach Zone, Gebiet oder PLZ..." onkeyup="searchFunction(this.value)"/>';
             return text;
         },
-        onRemove: function(map) {}
+        onRemove: function (map) {}
     });
 
-    const textbox = function(opts) {
+    const textbox = function (opts) {
         return new L.Control.textbox(opts);
     };
     textbox({position: 'topleft'}).addTo(map);
