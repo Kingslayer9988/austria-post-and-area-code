@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html lang="de-AT">
 <head>
-    <title>Ortsvorwahlen und Postleitzahlen in Österreich</title><!DOCTYPE html>
-<html lang="de-AT">
-<head>
     <title>Ortsvorwahlen und Postleitzahlen in Österreich</title>
 
     <meta charset="utf-8"/>
@@ -15,7 +12,6 @@
     <script src="leaflet/leaflet-hash.js"></script>
     <script src="leaflet/leaflet.CenterCross-v0.0.8.js"></script>
     <script src="js/zone_integration.js"></script>
-
 
     <style>
         html, body {
@@ -70,6 +66,9 @@
     let maxX = -Infinity;
     let maxY = -Infinity;
 
+    let zoneLayer = null;
+    let gebietLayer = null;
+
     const osm = L.tileLayer('https://{s}.tile.openstreetmap.de/tiles/osmde/{z}/{x}/{y}.png', {
         maxZoom: 18,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -108,69 +107,66 @@
     };
 
     const hash = new L.Hash(map);
-    // const popUpPromises = [];
 
     function popUp(feature, layer) {
-        // popUpPromises.push(new Promise((resolve, reject) => {
-            const out = [];
-            if (feature.hasOwnProperty('properties')) {
-                for (const key in feature.properties) {
-                    if (key === 'color') continue;
-                    if (key === 'color1') continue;
-                    if (key === 'plzcolor') continue;
-                    if (key === 'plzcolor1') continue;
-                    if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
-                        feature.properties[key] !== null
-                    ) {
-                        let valStr = '';
-                        if (Object.keys(feature.properties[key]).length > 1) {
-                            valStr += '<ul>';
-                            for (const val in feature.properties[key]) {
-                                if (feature.properties[key].hasOwnProperty(val)) {
-                                    valStr += '<li>';
-                                    valStr += val + ': ' + feature.properties[key][val];
-                                    valStr += '</li>';
-                                }
-                            }
-                            valStr += '</ul>';
-                        } else {
-                            for (const val in feature.properties[key]) {
-                                if (feature.properties[key].hasOwnProperty(val)) {
-                                    valStr += val + ': ' + feature.properties[key][val];
-                                }
+        const out = [];
+        if (feature.hasOwnProperty('properties')) {
+            for (const key in feature.properties) {
+                if (key === 'color') continue;
+                if (key === 'color1') continue;
+                if (key === 'plzcolor') continue;
+                if (key === 'plzcolor1') continue;
+                if (feature.properties.hasOwnProperty(key) && typeof feature.properties[key] == 'object' &&
+                    feature.properties[key] !== null
+                ) {
+                    let valStr = '';
+                    if (Object.keys(feature.properties[key]).length > 1) {
+                        valStr += '<ul>';
+                        for (const val in feature.properties[key]) {
+                            if (feature.properties[key].hasOwnProperty(val)) {
+                                valStr += '<li>';
+                                valStr += val + ': ' + feature.properties[key][val];
+                                valStr += '</li>';
                             }
                         }
-                        if (key === 'iso') {
-                            out.push("<b>GemKZ:</b> " + valStr);
-                        } else {
-                            out.push("<b>" + key + "</b>: " + valStr);
-                        }
+                        valStr += '</ul>';
                     } else {
-                        if (key === 'iso') {
-                            out.push("<b>GemKZ</b>: " + feature.properties[key]);
-                        } else {
-                            out.push("<b>" + key + "</b>: " + feature.properties[key]);
+                        for (const val in feature.properties[key]) {
+                            if (feature.properties[key].hasOwnProperty(val)) {
+                                valStr += val + ': ' + feature.properties[key][val];
+                            }
                         }
                     }
+                    if (key === 'iso') {
+                        out.push("<b>GemKZ:</b> " + valStr);
+                    } else {
+                        out.push("<b>" + key + "</b>: " + valStr);
+                    }
+                } else {
+                    if (key === 'iso') {
+                        out.push("<b>GemKZ</b>: " + feature.properties[key]);
+                    } else {
+                        out.push("<b>" + key + "</b>: " + feature.properties[key]);
+                    }
                 }
-                layer.bindPopup(out.join("<br />"), {maxHeight: 300});
             }
+            layer.bindPopup(out.join("<br />"), {maxHeight: 300});
+        }
 
-            if (feature.hasOwnProperty('featureBounds')) {
-                if (feature['featureBounds']['minX'] < minX) {
-                    minX = feature['featureBounds']['minX'];
-                }
-                if (feature['featureBounds']['maxX'] > maxX) {
-                    maxX = feature['featureBounds']['maxX'];
-                }
-                if (feature['featureBounds']['minY'] < minY) {
-                    minY = feature['featureBounds']['minY'];
-                }
-                if (feature['featureBounds']['maxY'] > maxY) {
-                    maxY = feature['featureBounds']['maxY'];
-                }
+        if (feature.hasOwnProperty('featureBounds')) {
+            if (feature['featureBounds']['minX'] < minX) {
+                minX = feature['featureBounds']['minX'];
             }
-        // }))
+            if (feature['featureBounds']['maxX'] > maxX) {
+                maxX = feature['featureBounds']['maxX'];
+            }
+            if (feature['featureBounds']['minY'] < minY) {
+                minY = feature['featureBounds']['minY'];
+            }
+            if (feature['featureBounds']['maxY'] > maxY) {
+                maxY = feature['featureBounds']['maxY'];
+            }
+        }
     }
 
     const vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json",
@@ -219,22 +215,6 @@
     plzLayer.getAttribution = function () {
         return 'BGO Holding GmbH - Team NOS';
     };
-    plzLayer.addTo(map);
-
-    // Promise.all(popUpPromises)
-    //     .then(response => {
-    //         console.log(response)
-    //         console.log("popUpPromises: " + minX + "/" + minY + " - " + maxX + "/" + maxY);
-    //         if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
-    //             map.fitBounds([
-    //                 [maxY, minX],
-    //                 [minY, maxX]
-    //             ]);
-    //         }
-    //     }
-    // )
-
-
 
     if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
         map.fitBounds([
@@ -253,7 +233,6 @@
         "Gemeinden": gemeindenLayer,
         "Bezirke": bezirkLayer,
         "Wiener Bezirke": wienBezirkLayer
-
     };
 
     const layerControl = L.control.layers(mapLayers, overlayLayers, {sortLayers: true}).addTo(map);
@@ -274,8 +253,6 @@
     map.on('locationfound', onLocationFound);
     map.on('locationerror', onLocationError);
 
-    //	map.locate({setView: true, maxZoom: 16});
-	
     function searchFunction(val) {
         minX = Infinity;
         minY = Infinity;
@@ -431,7 +408,7 @@
                     ]);
                 }
             })
-            .catch(error => console.log(`Error in executing ${error}`)) // Promise.all throws an error.
+            .catch(error => console.log(`Error in executing ${error}`)); // Promise.all throws an error.
     }
 
     L.Control.textbox = L.Control.extend({
@@ -450,122 +427,77 @@
         return new L.Control.textbox(opts);
     };
     textbox({position: 'topleft'}).addTo(map);
-// Add these variables to store the layers
-let vorwahlLayer;
-let plzLayer;
-let zoneLayer;
-let gebietLayer;
 
-// Initialize the zone data when the page loads
-document.addEventListener('DOMContentLoaded', function() {
-  // Load zone data
-  loadZoneData().then(success => {
-    if (success) {
-      console.log("Zone data loaded successfully. You can now use zone and gebiet visualizations.");
-    } else {
-      console.error("Failed to load zone data. Zone and gebiet visualizations won't be available.");
-    }
-  });
-});
-
-// Function to change visualization mode
-function changeVisualizationMode() {
-  const mode = document.getElementById('vizMode').value;
-  
-  // Hide all layers
-  if (vorwahlLayer && map.hasLayer(vorwahlLayer)) {
-    map.removeLayer(vorwahlLayer);
-  }
-  
-  if (plzLayer && map.hasLayer(plzLayer)) {
-    map.removeLayer(plzLayer);
-  }
-  
-  if (zoneLayer && map.hasLayer(zoneLayer)) {
-    map.removeLayer(zoneLayer);
-  }
-  
-  if (gebietLayer && map.hasLayer(gebietLayer)) {
-    map.removeLayer(gebietLayer);
-  }
-  
-  // Show the selected layer
-  if (mode === 'vorwahl') {
-    // Show the area code layer
-    if (!vorwahlLayer) {
-      vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: popUp,
-        style: function(feature) {
-          if (feature.properties.color === undefined) {
-            return {
-              'fillOpacity': 0,
-              'color': 'rgba(0,0,0,0)'
-            };
-          } else {
-            return {
-              'color': feature.properties.color
-            };
-          }
+    // Initialize the zone data when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+      // Load zone data
+      loadZoneData().then(success => {
+        if (success) {
+          console.log("Zone data loaded successfully. You can now use zone and gebiet visualizations.");
+        } else {
+          console.error("Failed to load zone data. Zone and gebiet visualizations won't be available.");
         }
       });
-    }
-    vorwahlLayer.addTo(map);
-  } else if (mode === 'plz') {
-    // Show the postal code layer
-    if (!plzLayer) {
-      plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: popUp,
-        style: function(feature) {
-          if (feature.properties['plzcolor'] === undefined) {
-            return {
-              'fillOpacity': 0,
-              'color': 'rgba(0,0,0,0)'
-            };
-          } else {
-            return {
-              'color': feature.properties['plzcolor']
-            };
-          }
+    });
+
+    // Function to change visualization mode
+    function changeVisualizationMode() {
+      const mode = document.getElementById('vizMode').value;
+      
+      // Hide all layers
+      if (vorwahlLayer && map.hasLayer(vorwahlLayer)) {
+        map.removeLayer(vorwahlLayer);
+      }
+      
+      if (plzLayer && map.hasLayer(plzLayer)) {
+        map.removeLayer(plzLayer);
+      }
+      
+      if (zoneLayer && map.hasLayer(zoneLayer)) {
+        map.removeLayer(zoneLayer);
+      }
+      
+      if (gebietLayer && map.hasLayer(gebietLayer)) {
+        map.removeLayer(gebietLayer);
+      }
+      
+      // Show the selected layer
+      if (mode === 'vorwahl') {
+        vorwahlLayer.addTo(map);
+      } else if (mode === 'plz') {
+        plzLayer.addTo(map);
+      } else if (mode === 'zone') {
+        // Show the zone layer
+        if (!zoneLayer) {
+          zoneLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+            onEachFeature: function(feature, layer) {
+              const popupContent = createPopupContent(feature);
+              if (popupContent) {
+                layer.bindPopup(popupContent);
+              }
+            },
+            style: getZoneStyle
+          });
         }
-      });
+        zoneLayer.addTo(map);
+        createZoneLegend();
+      } else if (mode === 'gebiet') {
+        // Show the gebiet layer
+        if (!gebietLayer) {
+          gebietLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+            onEachFeature: function(feature, layer) {
+              const popupContent = createPopupContent(feature);
+              if (popupContent) {
+                layer.bindPopup(popupContent);
+              }
+            },
+            style: getGebietStyle
+          });
+        }
+        gebietLayer.addTo(map);
+        createGebietLegend();
+      }
     }
-    plzLayer.addTo(map);
-  } else if (mode === 'zone') {
-    // Show the zone layer
-    if (!zoneLayer) {
-      zoneLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: function(feature, layer) {
-          const popupContent = createPopupContent(feature);
-          if (popupContent) {
-            layer.bindPopup(popupContent);
-          }
-        },
-        style: getZoneStyle
-      });
-    }
-    zoneLayer.addTo(map);
-    createZoneLegend();
-  } else if (mode === 'gebiet') {
-    // Show the gebiet layer
-    if (!gebietLayer) {
-      gebietLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
-        onEachFeature: function(feature, layer) {
-          const popupContent = createPopupContent(feature);
-          if (popupContent) {
-            layer.bindPopup(popupContent);
-          }
-        },
-        style: getGebietStyle
-      });
-    }
-    gebietLayer.addTo(map);
-    createGebietLegend();
-  }
-}
 </script>
-
-
-</body>
-</html>
 </body>
 </html>
