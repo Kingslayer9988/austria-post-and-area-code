@@ -1,0 +1,41 @@
+const fs = require('fs');
+
+// Load the data files
+const geoJsonPath = 'data/vorwahlen+plz.json';
+const plzToZonePath = 'data/nos_plz_to_zone.json';
+const zonesPath = 'data/nos_zones.json';
+
+// Read the files
+const geoJson = JSON.parse(fs.readFileSync(geoJsonPath, 'utf8'));
+const plzToZone = JSON.parse(fs.readFileSync(plzToZonePath, 'utf8'));
+const zonesData = JSON.parse(fs.readFileSync(zonesPath, 'utf8'));
+
+// Process each feature in the GeoJSON
+geoJson.features.forEach(feature => {
+  // Check if the feature has plz properties
+  if (feature.properties && feature.properties.plz) {
+    // Get the first PLZ code from the feature
+    const plzKeys = Object.keys(feature.properties.plz);
+    if (plzKeys.length > 0) {
+      const plz = plzKeys[0];
+      
+      // Look up the zone for this PLZ
+      if (plzToZone[plz]) {
+        const zone = plzToZone[plz];
+        const gebietId = zonesData.zones[zone].gebiet;
+        
+        // Add zone and gebiet information to the feature properties
+        feature.properties.zone = zone;
+        feature.properties.zoneName = zonesData.zones[zone].name;
+        feature.properties.zoneColor = zonesData.zones[zone].color;
+        feature.properties.gebiet = gebietId;
+        feature.properties.gebietName = zonesData.gebiet[gebietId].name;
+        feature.properties.gebietColor = zonesData.gebiet[gebietId].color;
+      }
+    }
+  }
+});
+
+// Save the modified GeoJSON
+fs.writeFileSync('data/vorwahlen+plz+zones.json', JSON.stringify(geoJson));
+console.log('Modified GeoJSON saved to data/vorwahlen+plz+zones.json');
