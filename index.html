@@ -51,6 +51,17 @@
 </head>
 <body>
 <div id="loader" class="loader"></div>
+<div class="form-control" id="visualization-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px;">
+  <label for="vizMode">View Mode:</label>
+  <select id="vizMode" onchange="changeVisualizationMode()">
+    <option value="vorwahl">By Area Code</option>
+    <option value="plz">By Postal Code</option>
+    <option value="zone">By Zone</option>
+    <option value="gebiet">By Delivery Area (Gebiet)</option>
+  </select>
+</div>
+
+<div id="map-legend" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;"></div>
 <div id='map'></div>
 
 <script>
@@ -180,7 +191,7 @@
         }
     );
     vorwahlLayer.getAttribution = function () {
-        return 'RTR-GmbH – data.rtr.at';
+        return 'BGO Holding GmbH - Team NOS';
     };
     vorwahlLayer.addEventListener('data:loaded', function () {
         console.log("Data loaded...");
@@ -206,7 +217,7 @@
         }
     );
     plzLayer.getAttribution = function () {
-        return 'BGO Holding GmbH - Team NOSt';
+        return 'BGO Holding GmbH - Team NOS';
     };
     plzLayer.addTo(map);
 
@@ -264,18 +275,6 @@
     map.on('locationerror', onLocationError);
 
     //	map.locate({setView: true, maxZoom: 16});
-
-<div class="form-control" id="visualization-controls" style="position: absolute; top: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border-radius: 5px;">
-  <label for="vizMode">View Mode:</label>
-  <select id="vizMode" onchange="changeVisualizationMode()">
-    <option value="vorwahl">By Area Code</option>
-    <option value="plz">By Postal Code</option>
-    <option value="zone">By Zone</option>
-    <option value="gebiet">By Delivery Area (Gebiet)</option>
-  </select>
-</div>
-
-<div id="map-legend" style="position: absolute; bottom: 20px; right: 20px; z-index: 1000; background: white; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;"></div>
 	
     function searchFunction(val) {
         minX = Infinity;
@@ -451,7 +450,118 @@
         return new L.Control.textbox(opts);
     };
     textbox({position: 'topleft'}).addTo(map);
+// Add these variables to store the layers
+let vorwahlLayer;
+let plzLayer;
+let zoneLayer;
+let gebietLayer;
 
+// Initialize the zone data when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+  // Load zone data
+  loadZoneData().then(success => {
+    if (success) {
+      console.log("Zone data loaded successfully. You can now use zone and gebiet visualizations.");
+    } else {
+      console.error("Failed to load zone data. Zone and gebiet visualizations won't be available.");
+    }
+  });
+});
+
+// Function to change visualization mode
+function changeVisualizationMode() {
+  const mode = document.getElementById('vizMode').value;
+  
+  // Hide all layers
+  if (vorwahlLayer && map.hasLayer(vorwahlLayer)) {
+    map.removeLayer(vorwahlLayer);
+  }
+  
+  if (plzLayer && map.hasLayer(plzLayer)) {
+    map.removeLayer(plzLayer);
+  }
+  
+  if (zoneLayer && map.hasLayer(zoneLayer)) {
+    map.removeLayer(zoneLayer);
+  }
+  
+  if (gebietLayer && map.hasLayer(gebietLayer)) {
+    map.removeLayer(gebietLayer);
+  }
+  
+  // Show the selected layer
+  if (mode === 'vorwahl') {
+    // Show the area code layer
+    if (!vorwahlLayer) {
+      vorwahlLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+        onEachFeature: popUp,
+        style: function(feature) {
+          if (feature.properties.color === undefined) {
+            return {
+              'fillOpacity': 0,
+              'color': 'rgba(0,0,0,0)'
+            };
+          } else {
+            return {
+              'color': feature.properties.color
+            };
+          }
+        }
+      });
+    }
+    vorwahlLayer.addTo(map);
+  } else if (mode === 'plz') {
+    // Show the postal code layer
+    if (!plzLayer) {
+      plzLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+        onEachFeature: popUp,
+        style: function(feature) {
+          if (feature.properties['plzcolor'] === undefined) {
+            return {
+              'fillOpacity': 0,
+              'color': 'rgba(0,0,0,0)'
+            };
+          } else {
+            return {
+              'color': feature.properties['plzcolor']
+            };
+          }
+        }
+      });
+    }
+    plzLayer.addTo(map);
+  } else if (mode === 'zone') {
+    // Show the zone layer
+    if (!zoneLayer) {
+      zoneLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+        onEachFeature: function(feature, layer) {
+          const popupContent = createPopupContent(feature);
+          if (popupContent) {
+            layer.bindPopup(popupContent);
+          }
+        },
+        style: getZoneStyle
+      });
+    }
+    zoneLayer.addTo(map);
+    createZoneLegend();
+  } else if (mode === 'gebiet') {
+    // Show the gebiet layer
+    if (!gebietLayer) {
+      gebietLayer = new L.GeoJSON.AJAX("data/vorwahlen+plz.json", {
+        onEachFeature: function(feature, layer) {
+          const popupContent = createPopupContent(feature);
+          if (popupContent) {
+            layer.bindPopup(popupContent);
+          }
+        },
+        style: getGebietStyle
+      });
+    }
+    gebietLayer.addTo(map);
+    createGebietLegend();
+  }
+}
 </script>
 
 
