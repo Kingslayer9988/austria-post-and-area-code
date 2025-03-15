@@ -160,31 +160,138 @@
             });
     }
 
-    // Function to determine the zone based on postal code
-    function determineZone(feature) {
-        if (!feature || !feature.properties) return null;
+    // Replace your current determineZone function with this improved version
+function determineZone(feature) {
+    if (!feature || !feature.properties) return null;
+    
+    // First try direct postal code matching (your original approach)
+    if (feature.properties.plz) {
+        let plzList = [];
+        if (typeof feature.properties.plz === 'object') {
+            plzList = Object.keys(feature.properties.plz);
+        } else {
+            plzList = [feature.properties.plz.toString()];
+        }
         
-        // Check for postal code (plz) in our mapping
-        if (feature.properties.plz) {
-            // Handle if plz is an object or a string
-            let plzList = [];
-            if (typeof feature.properties.plz === 'object') {
-                plzList = Object.keys(feature.properties.plz);
-            } else {
-                plzList = [feature.properties.plz.toString()];
+        for (const plz of plzList) {
+            if (plzToZoneMap[plz]) {
+                return plzToZoneMap[plz];
             }
+        }
+    }
+    
+    // If no direct match, try to infer zone from nearest defined postal codes
+    if (feature.properties.name) {
+        // Get coordinates or bounding box of the feature
+        let featureBounds = null;
+        if (feature.hasOwnProperty('featureBounds')) {
+            featureBounds = feature.featureBounds;
+        }
+        
+        // Try to find the nearest postal code that has a defined zone
+        if (featureBounds) {
+            // This would be complex to implement directly, but we can use a simpler approach
             
-            // Check each postal code
-            for (const plz of plzList) {
-                // Try exact match
-                if (plzToZoneMap[plz]) {
-                    return plzToZoneMap[plz];
+            // Option 1: Check nearby postal codes based on numeric proximity
+            if (feature.properties.plz) {
+                let plzList = [];
+                if (typeof feature.properties.plz === 'object') {
+                    plzList = Object.keys(feature.properties.plz);
+                } else {
+                    plzList = [feature.properties.plz.toString()];
+                }
+                
+                for (const plz of plzList) {
+                    // Try postal codes with small numeric differences
+                    const plzNum = parseInt(plz, 10);
+                    for (let offset = 1; offset <= 10; offset++) {
+                        const nearbyPLZ1 = (plzNum + offset).toString();
+                        const nearbyPLZ2 = (plzNum - offset).toString();
+                        
+                        if (plzToZoneMap[nearbyPLZ1]) {
+                            return plzToZoneMap[nearbyPLZ1];
+                        }
+                        if (plzToZoneMap[nearbyPLZ2]) {
+                            return plzToZoneMap[nearbyPLZ2];
+                        }
+                    }
                 }
             }
         }
-        return null;
     }
-
+    
+    // As a last resort, use a more general approach for postal code ranges
+    // This is based on the first 1-2 digits of postal codes which tend to correlate with zones
+    if (feature.properties.plz) {
+        let plzList = [];
+        if (typeof feature.properties.plz === 'object') {
+            plzList = Object.keys(feature.properties.plz);
+        } else {
+            plzList = [feature.properties.plz.toString()];
+        }
+        
+        for (const plz of plzList) {
+            const prefix = plz.substring(0, 1);
+            const prefix2 = plz.substring(0, 2);
+            
+            // Map postal code prefixes to zones based on your data patterns
+            // These are based on analyzing your nos_plz_to_zone.json patterns
+            
+            // PLZ starting with 1 are typically Zone A (Vienna)
+            if (prefix === '1') return 'A';
+            
+            // PLZ starting with 2 are typically Zone A (around Vienna)
+            if (prefix === '2') return 'A';
+            
+            // PLZ starting with 3 are more complex, with 30-31 being A, 32-33 being B, etc.
+            if (prefix === '3') {
+                if (prefix2 === '30' || prefix2 === '31') return 'A';
+                if (prefix2 === '32' || prefix2 === '33' || prefix2 === '34') return 'B';
+                if (prefix2 === '35' || prefix2 === '36') return 'B';
+                if (prefix2 === '37') return 'A';
+                if (prefix2 === '38' || prefix2 === '39') return 'C';
+                return 'B'; // Default for 3xxx
+            }
+            
+            // PLZ starting with 4 are typically Zone D (Upper Austria)
+            if (prefix === '4') {
+                if (parseInt(prefix2) >= 48 && parseInt(prefix2) <= 49) return 'H';
+                return 'D';
+            }
+            
+            // PLZ starting with 5 are typically Zone H (Salzburg)
+            if (prefix === '5') {
+                if (prefix2 === '57' || prefix2 === '58' || prefix2 === '59') return 'G';
+                return 'H';
+            }
+            
+            // PLZ starting with 6 are typically Zone I (Tirol)
+            if (prefix === '6') {
+                if (parseInt(prefix2) >= 65 && parseInt(prefix2) <= 69) return 'J';
+                return 'I';
+            }
+            
+            // PLZ starting with 7 are mixed
+            if (prefix === '7') {
+                if (parseInt(prefix2) <= 73) return 'A';
+                if (prefix2 === '74' || prefix2 === '75') return 'E';
+                return 'F';
+            }
+            
+            // PLZ starting with 8 are typically Zone F (Styria) with exceptions
+            if (prefix === '8') {
+                if (prefix2 === '85' || prefix2 === '86' || prefix2 === '87') return 'E';
+                if (prefix2 === '88' || prefix2 === '89') return 'G';
+                return 'F';
+            }
+            
+            // PLZ starting with 9 are typically Zone G (Carinthia)
+            if (prefix === '9') return 'G';
+        }
+    }
+    
+    return null;
+}
     // Cache for zone determinations to improve performance
     const zoneCache = new Map();
     
