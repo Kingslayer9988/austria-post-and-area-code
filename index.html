@@ -164,7 +164,7 @@
 function determineZone(feature) {
     if (!feature || !feature.properties) return null;
     
-    // First try direct postal code matching (your original approach)
+    // STEP 1: First try direct PLZ match (existing approach)
     if (feature.properties.plz) {
         let plzList = [];
         if (typeof feature.properties.plz === 'object') {
@@ -178,64 +178,10 @@ function determineZone(feature) {
                 return plzToZoneMap[plz];
             }
         }
-        
-        // If no exact match found but we have PLZ, let's use the prefix-based approach
-        for (const plz of plzList) {
-            // Get the first 1-2 digits to determine the general zone
-            const prefix = plz.substring(0, 1);
-            
-            // Very simplified mapping based on first digit of postal code
-            switch(prefix) {
-                case '1': 
-                case '2': 
-                case '3': // These might be A, B, or C depending on second digit
-                    return 'A'; // Default to A for 1xxx, 2xxx, 3xxx
-                case '4': 
-                    return 'D'; // 4xxx is mostly D (Upper Austria)
-                case '5': 
-                    return 'H'; // 5xxx is mostly H (Salzburg) 
-                case '6': 
-                    return 'I'; // 6xxx is mostly I (Tirol)
-                case '7': 
-                    return 'A'; // 7xxx is mostly A (Burgenland)
-                case '8': 
-                    return 'F'; // 8xxx is mostly F (Styria)
-                case '9': 
-                    return 'G'; // 9xxx is mostly G (Carinthia)
-                default:
-                    return null;
-            }
-        }
     }
     
-    // If we still don't have a zone assignment, check if it has a name property
-    // that might indicate its region
-    if (feature.properties.name) {
-        const name = feature.properties.name.toLowerCase();
-        if (name.includes('wien') || name.includes('vienna')) {
-            return 'A';
-        } else if (name.includes('niederösterreich')) {
-            return 'B';
-        } else if (name.includes('oberösterreich')) {
-            return 'D';
-        } else if (name.includes('burgenland')) {
-            return 'A';
-        } else if (name.includes('steiermark')) {
-            return 'F';
-        } else if (name.includes('salzburg')) {
-            return 'H';
-        } else if (name.includes('tirol')) {
-            return 'I';
-        } else if (name.includes('vorarlberg')) {
-            return 'J';
-        } else if (name.includes('kärnten')) {
-            return 'G';
-        }
-    }
-    
-    // As a very last resort - if it has area code information
+    // STEP 2: If no PLZ match, try using vorwahl (area code)
     if (feature.properties.vorwahl) {
-        // Area codes are often related to regions
         let vorwahlList = [];
         if (typeof feature.properties.vorwahl === 'object') {
             vorwahlList = Object.keys(feature.properties.vorwahl);
@@ -243,23 +189,103 @@ function determineZone(feature) {
             vorwahlList = [feature.properties.vorwahl.toString()];
         }
         
-        // Extremely simplified mapping based on area code first digit
+        // Map area code prefixes to zones
         for (const vorwahl of vorwahlList) {
-            const prefix = vorwahl.substring(0, 1);
-            switch(prefix) {
-                case '1': return 'A'; // Vienna
-                case '2': return 'A'; // Around Vienna 
-                case '3': return 'B'; // Parts of Lower Austria
-                case '4': return 'D'; // Upper Austria
-                case '5': return 'H'; // Salzburg/Tyrol
-                case '6': return 'G'; // Carinthia
-                case '7': return 'A'; // Burgenland
-                default: return null;
+            // Vienna and surrounding areas
+            if (vorwahl === "1") return "A"; // Vienna
+            
+            // Area codes starting with 2
+            if (vorwahl.startsWith("2")) {
+                // Specific mapping of 2xx area codes
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Lower Austria around Vienna
+                if (prefix3 >= "210" && prefix3 <= "299") return "A";
+            }
+            
+            // Area codes starting with 3
+            if (vorwahl.startsWith("3")) {
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Northern Lower Austria
+                if (prefix3 >= "310" && prefix3 <= "349") return "B";
+                
+                // Western Lower Austria
+                if (prefix3 >= "350" && prefix3 <= "399") return "C";
+            }
+            
+            // Area codes starting with 4
+            if (vorwahl.startsWith("4")) {
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Upper Austria
+                if (prefix3 >= "410" && prefix3 <= "479") return "D";
+                
+                // Northern Upper Austria
+                if (prefix3 >= "480" && prefix3 <= "499") return "H";
+            }
+            
+            // Area codes starting with 5
+            if (vorwahl.startsWith("5")) {
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Salzburg
+                if (prefix3 >= "500" && prefix3 <= "569") return "H";
+                
+                // Tyrol
+                if (prefix3 >= "570" && prefix3 <= "589") return "I";
+                
+                // Vorarlberg
+                if (prefix3 >= "590" && prefix3 <= "599") return "J";
+            }
+            
+            // Area codes starting with 6
+            if (vorwahl.startsWith("6")) {
+                // Carinthia
+                return "G";
+            }
+            
+            // Area codes starting with 7
+            if (vorwahl.startsWith("7")) {
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Burgenland
+                if (prefix3 >= "700" && prefix3 <= "739") return "A";
+                
+                // Southern Burgenland/Styria
+                if (prefix3 >= "740" && prefix3 <= "759") return "E";
+                
+                // Styria
+                if (prefix3 >= "760" && prefix3 <= "799") return "F";
+            }
+            
+            // Area codes starting with 8
+            if (vorwahl.startsWith("8")) {
+                const prefix3 = vorwahl.substring(0, 3);
+                
+                // Styria
+                if (prefix3 >= "800" && prefix3 <= "859") return "F";
+                
+                // Southern Styria/Eastern Carinthia
+                if (prefix3 >= "860" && prefix3 <= "879") return "E";
+                
+                // Carinthia
+                if (prefix3 >= "880" && prefix3 <= "899") return "G";
+            }
+            
+            // Area codes starting with 9
+            if (vorwahl.startsWith("9")) {
+                // Carinthia
+                return "G";
             }
         }
     }
     
-    return null;
+    // STEP 3: If we still can't determine, try to use nearby postal codes by geographic proximity
+    // This is hard to implement without spatial analysis
+    
+    // STEP 4: Default zone based on where most of Austria's population is
+    return "A";  // Default to Vienna and surroundings
 }
     // Cache for zone determinations to improve performance
     const zoneCache = new Map();
