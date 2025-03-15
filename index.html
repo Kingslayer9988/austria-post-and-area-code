@@ -464,7 +464,7 @@ function determineZone(feature) {
             }
         );
         liefergebieteLayer.getAttribution = function () {
-            return 'RTR-GmbH – data.rtr.at | Liefergebiete angepasst';
+            return 'Bgo Montage Holding GmbH – www.bgo-montage.com | NOS Liefergebiete';
         };
         liefergebieteLayer.addEventListener('data:loaded', function () {
             console.log("Data loaded...");
@@ -492,7 +492,7 @@ function determineZone(feature) {
             }
         );
         plzLayer.getAttribution = function () {
-            return 'RTR-GmbH – data.rtr.at';
+            return 'Bgo Montage Holding GmbH – www.bgo-montage.com | NOS Liefergebiete';
         };
     
         if (minX < Infinity && maxX > -Infinity && minY < Infinity && maxY > -Infinity) {
